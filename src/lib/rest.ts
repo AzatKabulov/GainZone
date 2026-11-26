@@ -79,7 +79,7 @@ export function startRest(seconds: number, weId: string, label: string) {
     return;
   }
   const endsAt = Date.now() + seconds * 1000;
-  useActive.setState({ rest: { endsAt, total: seconds, weId, label } });
+  useActive.setState({ rest: { id: Date.now(), endsAt, total: seconds, weId, label } });
   void scheduleNotif(endsAt, label);
 }
 

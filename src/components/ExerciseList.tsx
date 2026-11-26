@@ -5,10 +5,9 @@ import { FlatList, ScrollView, View, type ListRenderItem } from 'react-native';
 import { muscleBreakdown, searchExercises, type ExerciseDef } from '@/data/exercises';
 import { EQUIP_NAME } from '@/data/exerciseTypes';
 import { GROUPS, MUSCLES, type GroupId } from '@/data/muscles';
-import { exAltName, useAllExercises, useExName } from '@/lib/exercise';
+import { useAllExercises, useExName } from '@/lib/exercise';
 import { finishedWorkouts } from '@/lib/stats';
 import { useData } from '@/store/data';
-import { useSettings } from '@/store/settings';
 import { alpha, useTheme } from '@/theme';
 import { ExerciseThumb } from './kit';
 import { Chip, Input, Press, Txt } from './ui';
@@ -29,7 +28,6 @@ export function ExerciseList({
 }) {
   const { c, accent } = useTheme();
   const all = useAllExercises();
-  const lang = useSettings((s) => s.exLang);
   const workouts = useData((s) => s.workouts);
   const [q, setQ] = useState('');
   const [group, setGroup] = useState<GroupId | 'all' | 'recent'>('all');
@@ -70,7 +68,7 @@ export function ExerciseList({
         <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
       </View>
     ) : (
-      <Row ex={item.ex} selected={sel.has(item.ex.id)} onPress={onPress} lang={lang} accent={accent} />
+      <Row ex={item.ex} selected={sel.has(item.ex.id)} onPress={onPress} accent={accent} />
     );
 
   return (
@@ -88,7 +86,7 @@ export function ExerciseList({
           {header}
           <View style={{ paddingHorizontal: 20 }}>
             <View>
-              <Input value={q} onChangeText={setQ} placeholder="Search: жим, pulldown, молитва…" autoCorrect={false} style={{ paddingLeft: 40 }} />
+              <Input value={q} onChangeText={setQ} placeholder="Search exercises" autoCorrect={false} style={{ paddingLeft: 40 }} />
               <Ionicons name="search" size={17} color={c.textFaint} style={{ position: 'absolute', left: 14, top: 15 }} />
             </View>
           </View>
@@ -104,7 +102,7 @@ export function ExerciseList({
       ListEmptyComponent={
         <View style={{ alignItems: 'center', padding: 30 }}>
           <Txt variant="small" color={c.textDim}>
-            Nothing found. Create it as a custom exercise.
+            Nothing found.
           </Txt>
         </View>
       }
@@ -112,7 +110,7 @@ export function ExerciseList({
   );
 }
 
-const Row = memo(function Row({ ex, selected, onPress, lang, accent }: { ex: ExerciseDef; selected: boolean; onPress: (e: ExerciseDef) => void; lang: 'en' | 'ru'; accent: string }) {
+const Row = memo(function Row({ ex, selected, onPress, accent }: { ex: ExerciseDef; selected: boolean; onPress: (e: ExerciseDef) => void; accent: string }) {
   const { c } = useTheme();
   const exName = useExName();
   const prim = muscleBreakdown(ex)
@@ -141,10 +139,7 @@ const Row = memo(function Row({ ex, selected, onPress, lang, accent }: { ex: Exe
         <Txt variant="title" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
           {exName(ex)}
         </Txt>
-        <Txt variant="small" color={c.textDim} numberOfLines={1}>
-          {exAltName(ex, lang)}
-        </Txt>
-        <Txt variant="label" color={c.textFaint} numberOfLines={1} style={{ fontSize: 9, marginTop: 3 }}>
+        <Txt variant="label" color={c.textFaint} numberOfLines={1} style={{ fontSize: 9, marginTop: 4 }}>
           {(prim || '—').toUpperCase()} · {EQUIP_NAME[ex.equip].toUpperCase()}
           {ex.custom ? ' · CUSTOM' : ''}
         </Txt>

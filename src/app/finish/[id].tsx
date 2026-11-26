@@ -5,10 +5,10 @@ import { ScrollView, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BodyMapPair } from '@/components/BodyMap';
+import { Body3D } from '@/components/Body3D';
 import { Delta } from '@/components/charts';
 import { FxHost } from '@/components/FxHost';
-import { FieldLabel, heatColors, Stat } from '@/components/kit';
+import { FieldLabel, heatColors, Stat, useBodyPalette } from '@/components/kit';
 import { Button, Card, Input, Press, Section, Txt } from '@/components/ui';
 import { MUSCLE_IDS, MUSCLES, type MuscleId } from '@/data/muscles';
 import { todayKey } from '@/lib/date';
@@ -41,6 +41,8 @@ function sessionHeat(sets: number): 0 | 1 | 2 | 3 {
 export default function FinishScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c, accent, isDark } = useTheme();
+  const palette = useBodyPalette();
+  const [scrollOn, setScrollOn] = useState(true);
   const insets = useSafeAreaInsets();
   const w = useData((s) => s.workouts[id]);
   const all = useData((s) => s.workouts);
@@ -96,7 +98,7 @@ export default function FinishScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingTop: insets.top + 24, paddingBottom: insets.bottom + 30 }}>
+      <ScrollView scrollEnabled={scrollOn} automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingTop: insets.top + 24, paddingBottom: insets.bottom + 30 }}>
         <Animated.View entering={FadeInDown.duration(450)}>
           <Txt variant="label" color={accent}>
             WORKOUT COMPLETE
@@ -151,7 +153,9 @@ export default function FinishScreen() {
         <Animated.View entering={FadeInDown.delay(200).duration(450)}>
           <Section label="MUSCLES WORKED" count={worked.length} style={{ marginTop: 24, marginBottom: 12 }} />
           <Card>
-            <BodyMapPair colors={colors} height={210} />
+            <View style={{ height: 330, marginHorizontal: -16, marginVertical: -16, borderRadius: 16, overflow: 'hidden' }}>
+              <Body3D colors={colors} palette={palette} background={c.surface} autoRotate onInteract={(a) => setScrollOn(!a)} style={{ flex: 1 }} />
+            </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
               {worked.map((m) => (
                 <View key={m} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 9, height: 28, borderRadius: 8, backgroundColor: c.surface2, borderWidth: 1, borderColor: c.border }}>

@@ -18,6 +18,8 @@ export interface ActiveWorkout {
 }
 
 export interface RestState {
+  /** unique per rest period */
+  id?: number;
   endsAt: number;
   total: number;
   weId: string;

@@ -3,7 +3,6 @@ import { useMemo } from 'react';
 import { BUILTIN_BY_ID, BUILTIN_EXERCISES, type ExerciseDef } from '@/data/exercises';
 import { EXERCISE_IMAGES } from '@/data/exerciseImages';
 import { useData, type CustomExercise } from '@/store/data';
-import { useSettings } from '@/store/settings';
 
 export function customToDef(c: CustomExercise): ExerciseDef {
   return {
@@ -16,14 +15,13 @@ export function customToDef(c: CustomExercise): ExerciseDef {
     mech: Object.values(c.muscles).filter((v) => (v ?? 0) >= 25).length > 1 ? 'compound' : 'isolation',
     m: c.muscles,
     rest: c.rest,
-    tips: c.notes ? [c.notes] : [],
     custom: true,
   };
 }
 
 const UNKNOWN = (id: string): ExerciseDef => ({
   id,
-  name: 'Упражнение',
+  name: 'Exercise',
   en: 'Exercise',
   group: 'chest',
   equip: 'other',
@@ -31,7 +29,6 @@ const UNKNOWN = (id: string): ExerciseDef => ({
   mech: 'compound',
   m: {},
   rest: 120,
-  tips: [],
 });
 
 export function getExercise(id: string): ExerciseDef {
@@ -59,20 +56,17 @@ export function useAllExercises(): ExerciseDef[] {
   );
 }
 
-/** Name in the chosen language (the other one is shown as a subtitle). */
-export function exName(e: ExerciseDef, lang = useSettings.getState().exLang): string {
-  return lang === 'ru' ? e.name : e.en;
-}
-export function exAltName(e: ExerciseDef, lang = useSettings.getState().exLang): string {
-  return lang === 'ru' ? e.en : e.name;
+/** Display name (the app is English-only; Russian names are kept for search). */
+export function exName(e: ExerciseDef): string {
+  return e.en;
 }
 
 export function useExName() {
-  const lang = useSettings((s) => s.exLang);
-  return (e: ExerciseDef) => exName(e, lang);
+  return exName;
 }
 
-export function exImages(id: string): [number, number] | null {
+/** 3D thumbnail rendered from the anatomy model (null for custom exercises). */
+export function exImage(id: string): number | null {
   return EXERCISE_IMAGES[id] ?? null;
 }
 

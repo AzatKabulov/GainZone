@@ -4,13 +4,13 @@ import { useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BodyMapPair } from '@/components/BodyMap';
+import { Body3D } from '@/components/Body3D';
 import { FxHost } from '@/components/FxHost';
-import { FieldLabel, heatColors, SheetHeader, Stat } from '@/components/kit';
+import { FieldLabel, heatColors, SheetHeader, Stat, useBodyPalette } from '@/components/kit';
 import { Button, Card, Empty, Input, Press, Section, Txt } from '@/components/ui';
 import { MUSCLE_IDS, type MuscleId } from '@/data/muscles';
 import { dateKey, relativeLabel } from '@/lib/date';
-import { exAltName, getExercise, useExName } from '@/lib/exercise';
+import { getExercise, useExName } from '@/lib/exercise';
 import { haptic } from '@/lib/haptics';
 import { confirm } from '@/lib/menu';
 import { addExerciseToMuscles, emptyMuscleStats, FEELINGS, fmtDur, fmtSetValue, fmtVolume } from '@/lib/stats';
@@ -23,6 +23,8 @@ import { alpha, fonts, useTheme } from '@/theme';
 export default function SessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c, accent, isDark } = useTheme();
+  const palette = useBodyPalette();
+  const [scrollOn, setScrollOn] = useState(true);
   const insets = useSafeAreaInsets();
   const w = useData((s) => s.workouts[id]);
   const exName = useExName();
@@ -98,7 +100,7 @@ export default function SessionScreen() {
           </Press>
         }
       />
-      <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 30 }}>
+      <ScrollView scrollEnabled={scrollOn} automaticallyAdjustKeyboardInsets contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 30 }}>
         {editing ? (
           <View style={{ marginBottom: 16 }}>
             <FieldLabel>NAME</FieldLabel>
@@ -146,7 +148,9 @@ export default function SessionScreen() {
         </Card>
 
         <Card style={{ marginTop: 12 }}>
-          <BodyMapPair colors={colors} height={180} />
+          <View style={{ height: 300, marginHorizontal: -16, marginVertical: -16, borderRadius: 16, overflow: 'hidden' }}>
+              <Body3D colors={colors} palette={palette} background={c.surface} autoRotate onInteract={(a) => setScrollOn(!a)} style={{ flex: 1 }} />
+            </View>
         </Card>
 
         <Section label="EXERCISES" count={w.exercises.length} style={{ marginTop: 22, marginBottom: 10 }} />
@@ -160,9 +164,6 @@ export default function SessionScreen() {
                   <Text style={{ fontFamily: fonts.semibold, fontSize: 16, color: accent }} numberOfLines={1}>
                     {exName(ex)}
                   </Text>
-                  <Txt variant="small" color={c.textFaint} numberOfLines={1}>
-                    {exAltName(ex)}
-                  </Txt>
                 </Press>
                 <View style={{ marginTop: 8, gap: 2 }}>
                   {we.sets.map((s) => {

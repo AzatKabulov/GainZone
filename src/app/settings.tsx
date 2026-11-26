@@ -8,6 +8,7 @@ import { Alert, Platform, ScrollView, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fmtRest, REST_PRESETS } from '@/components/ExerciseBlock';
+import { ANATOMY_CREDIT } from '@/components/Body3D';
 import { FxHost } from '@/components/FxHost';
 import { FieldLabel, SheetHeader } from '@/components/kit';
 import { Button, Card, Chip, Input, Press, Section, Txt, type IconName } from '@/components/ui';
@@ -179,12 +180,6 @@ export default function SettingsScreen() {
                 }}
               />
             </Row>
-            <Row icon="language-outline" title="Exercise names" sub="The other language is shown underneath">
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                <Chip label="EN" active={settings.exLang === 'en'} onPress={() => settings.set({ exLang: 'en' })} />
-                <Chip label="RU" active={settings.exLang === 'ru'} onPress={() => settings.set({ exLang: 'ru' })} />
-              </View>
-            </Row>
           </View>
         </View>
 
@@ -281,7 +276,7 @@ export default function SettingsScreen() {
 
         <Button label={session ? 'SIGN OUT' : 'EXIT OFFLINE MODE'} icon="log-out-outline" variant="danger" onPress={doSignOut} />
         <Txt variant="label" color={c.textFaint} style={{ textAlign: 'center' }}>
-          GAINZONE v{Constants.expoConfig?.version ?? '1.0.0'} · DEMO PHOTOS: FREE-EXERCISE-DB (PUBLIC DOMAIN)
+          GAINZONE v{Constants.expoConfig?.version ?? '1.0.0'}{'\n'}{ANATOMY_CREDIT.toUpperCase()}
         </Txt>
       </ScrollView>
       <FxHost inSheet />

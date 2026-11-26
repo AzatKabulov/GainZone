@@ -34,9 +34,8 @@ export interface ExerciseDef {
   m: Partial<Record<MuscleId, number>>;
   /** default rest, seconds */
   rest: number;
-  tips: string[];
-  /** folder name in the public-domain free-exercise-db (for demo photos) */
-  img?: string;
+  /** one arm / one leg at a time: log left and right reps separately */
+  uni?: boolean;
   aka?: string[];
   custom?: boolean;
 }
@@ -55,7 +54,7 @@ export const EQUIP_NAME: Record<Equip, string> = {
   cardio: 'Cardio',
 };
 
-type Def = Omit<ExerciseDef, 'id' | 'name' | 'en' | 'group' | 'equip' | 'm'> & {};
+type Def = Omit<ExerciseDef, 'id' | 'name' | 'en' | 'group' | 'equip' | 'm'> & { img?: string };
 
 export function ex(
   id: string,
@@ -64,7 +63,7 @@ export function ex(
   group: GroupId,
   equip: Equip,
   m: Partial<Record<MuscleId, number>>,
-  opts: Partial<Def> & { tips: string[] },
+  opts: Partial<Def> = {},
 ): ExerciseDef {
   const isolation = Object.values(m).filter((v) => (v ?? 0) >= 25).length <= 1;
   return {
@@ -77,8 +76,7 @@ export function ex(
     type: opts.type ?? 'weight_reps',
     mech: opts.mech ?? (isolation ? 'isolation' : 'compound'),
     rest: opts.rest ?? (isolation ? 90 : 150),
-    tips: opts.tips,
-    img: opts.img,
+    uni: opts.uni,
     aka: opts.aka,
   };
 }

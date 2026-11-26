@@ -47,10 +47,15 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
     "@types/react": "~19.3.0",
     "@types/three": "^0.187.0",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~58.0.4",
+    "meshoptimizer": "^0.22.0",
+    "open-anatomy-3d": "^0.1.0",
+    "three-mesh-bvh": "^0.9.18",
     "typescript": "~6.0.3"
   },
   "scripts": {

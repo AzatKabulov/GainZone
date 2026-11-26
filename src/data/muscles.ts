@@ -55,7 +55,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Pectoralis major, pars clavicularis',
     group: 'chest',
     weekly: [6, 12],
-    about: 'Ключичная часть большой грудной. Лучше всего работает в жимах и разведениях на наклоне 15–30° и в сведениях снизу вверх.',
+    about: 'Clavicular head of the pec. Best hit by 15–30° incline presses and low-to-high flyes.',
   },
   chest_mid: {
     id: 'chest_mid',
@@ -65,7 +65,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Pectoralis major, pars sternocostalis',
     group: 'chest',
     weekly: [8, 16],
-    about: 'Грудинная часть — основная масса груди. Горизонтальные жимы, бабочка, сведения на уровне груди.',
+    about: 'Sternal head — most of the chest mass. Flat presses, pec deck, mid-height cable flyes.',
   },
   chest_lower: {
     id: 'chest_lower',
@@ -75,7 +75,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Pectoralis major, pars abdominalis',
     group: 'chest',
     weekly: [4, 10],
-    about: 'Нижние волокна груди. Брусья, жимы головой вниз, кроссовер сверху вниз.',
+    about: 'Lower fibres of the pec. Dips, decline presses, high-to-low crossovers.',
   },
   delts_front: {
     id: 'delts_front',
@@ -85,7 +85,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Deltoideus, pars clavicularis',
     group: 'shoulders',
     weekly: [4, 12],
-    about: 'Сильно нагружается во всех жимах груди и над головой — отдельная изоляция нужна редко.',
+    about: 'Works hard in every chest and overhead press — rarely needs extra isolation.',
   },
   delts_side: {
     id: 'delts_side',
@@ -95,7 +95,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Deltoideus, pars acromialis',
     group: 'shoulders',
     weekly: [8, 20],
-    about: 'Даёт ширину плеч. Махи в стороны (гантели, кроссовер, тренажёр), тяга к подбородку.',
+    about: 'Gives shoulder width. Lateral raises (dumbbell, cable, machine), upright rows.',
   },
   delts_rear: {
     id: 'delts_rear',
@@ -105,7 +105,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Deltoideus, pars spinalis',
     group: 'shoulders',
     weekly: [6, 16],
-    about: 'Объём плеча сзади и здоровье суставов. Обратная бабочка, разведения в наклоне, тяга к лицу.',
+    about: 'Rear of the shoulder and joint health. Reverse pec deck, rear-delt flyes, face pulls.',
   },
   biceps: {
     id: 'biceps',
@@ -115,7 +115,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Biceps brachii + brachialis',
     group: 'biceps',
     weekly: [8, 18],
-    about: 'Двуглавая мышца плеча и плечевая мышца. Сгибания, молотки, а также все тяги спины.',
+    about: 'Biceps brachii + brachialis. Curls, hammer curls and every pulling movement.',
   },
   triceps: {
     id: 'triceps',
@@ -125,7 +125,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Triceps brachii',
     group: 'triceps',
     weekly: [6, 16],
-    about: '2/3 объёма руки. Длинная головка лучше растягивается в разгибаниях из-за головы.',
+    about: 'Two thirds of the upper arm. The long head grows best with overhead extensions.',
   },
   forearms: {
     id: 'forearms',
@@ -135,7 +135,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Brachioradialis, flexors / extensors',
     group: 'forearms',
     weekly: [4, 12],
-    about: 'Плечелучевая и мышцы кисти. Молотки, обратные сгибания, хват во всех тягах.',
+    about: 'Brachioradialis and wrist flexors / extensors. Hammer and reverse curls, grip in every pull.',
   },
   traps: {
     id: 'traps',
@@ -145,7 +145,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Trapezius, pars descendens',
     group: 'traps',
     weekly: [4, 14],
-    about: 'Верхняя часть трапеции. Шраги, тяга к подбородку, становая.',
+    about: 'Upper trapezius. Shrugs, upright rows, deadlifts.',
   },
   upper_back: {
     id: 'upper_back',
@@ -155,7 +155,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Rhomboids + middle trapezius',
     group: 'back',
     weekly: [8, 16],
-    about: 'Ромбовидные и средняя трапеция — толщина спины. Горизонтальные тяги широким хватом к груди.',
+    about: 'Rhomboids, middle & lower traps, rotator cuff — back thickness. Wide-grip rows to the chest.',
   },
   lats: {
     id: 'lats',
@@ -165,7 +165,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Latissimus dorsi',
     group: 'back',
     weekly: [10, 20],
-    about: 'Ширина спины (V-силуэт). Вертикальные тяги, подтягивания, тяги к поясу.',
+    about: 'Back width (the V-taper). Pulldowns, pull-ups, rows to the hip.',
   },
   lower_back: {
     id: 'lower_back',
@@ -175,7 +175,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Erector spinae',
     group: 'back',
     weekly: [3, 10],
-    about: 'Разгибатели спины. Становые тяги, гиперэкстензии, наклоны.',
+    about: 'Spinal erectors. Deadlifts, back extensions, good mornings.',
   },
   abs: {
     id: 'abs',
@@ -185,7 +185,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Rectus abdominis',
     group: 'abs',
     weekly: [6, 16],
-    about: 'Прямая мышца живота. «Молитва», скручивания, подъёмы ног.',
+    about: 'Rectus abdominis. Cable crunches, crunches, leg raises.',
   },
   obliques: {
     id: 'obliques',
@@ -195,7 +195,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Obliquus externus / internus',
     group: 'abs',
     weekly: [4, 12],
-    about: 'Косые мышцы живота — вращения и наклоны корпуса.',
+    about: 'Obliques — rotation and side bending of the trunk.',
   },
   glutes: {
     id: 'glutes',
@@ -205,7 +205,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Gluteus maximus / medius',
     group: 'legs',
     weekly: [6, 16],
-    about: 'Большая и средняя ягодичные. Присед, выпады, ягодичный мост, румынская тяга.',
+    about: 'Glute max & medius. Squats, lunges, hip thrusts, Romanian deadlifts.',
   },
   quads: {
     id: 'quads',
@@ -215,7 +215,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Quadriceps femoris',
     group: 'legs',
     weekly: [8, 18],
-    about: 'Передняя поверхность бедра. Приседания, жим ногами, выпады, разгибания.',
+    about: 'Front of the thigh. Squats, leg press, lunges, leg extensions.',
   },
   hamstrings: {
     id: 'hamstrings',
@@ -225,7 +225,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Biceps femoris, semitendinosus',
     group: 'legs',
     weekly: [6, 16],
-    about: 'Задняя поверхность бедра. Румынская тяга, сгибания ног.',
+    about: 'Back of the thigh. Romanian deadlifts, leg curls.',
   },
   adductors: {
     id: 'adductors',
@@ -235,7 +235,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Adductor magnus / longus',
     group: 'legs',
     weekly: [3, 10],
-    about: 'Внутренняя поверхность бедра. Глубокий присед, сумо, сведение ног.',
+    about: 'Inner thigh. Deep squats, sumo stance, adduction machine.',
   },
   calves: {
     id: 'calves',
@@ -245,7 +245,7 @@ export const MUSCLES: Record<MuscleId, MuscleInfo> = {
     latin: 'Gastrocnemius + soleus',
     group: 'legs',
     weekly: [6, 16],
-    about: 'Икроножная (стоя) и камбаловидная (сидя).',
+    about: 'Gastrocnemius (standing raises) and soleus (seated raises).',
   },
 };
 

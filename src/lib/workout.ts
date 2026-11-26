@@ -25,6 +25,7 @@ import {
   isWorking,
   lastSession,
   previousForSets,
+  topReps,
   workoutTotals,
 } from './stats';
 
@@ -51,18 +52,21 @@ export function buildExercise(exerciseId: string, tpl?: TemplateExercise): Worko
       ? prev.we.sets.filter((s) => s.done).map((s) => ({ type: s.type }))
       : [{ type: 'normal' }, { type: 'normal' }, { type: 'normal' }];
   const prevs = previousForSets(prev, shape);
+  const split = tpl?.split ?? prev?.we.split ?? !!ex.uni;
   const sets = shape.map(({ type, t }, i) => {
     const p = prevs[i];
     const s = blankSet(type);
     if (prefill && p) {
       s.weight = p.weight;
       s.reps = p.reps;
+      s.reps_r = split ? (p.reps_r ?? p.reps) : null;
       s.time = p.time ?? null;
       s.dist = p.dist ?? null;
       s.auto = true;
     } else if (t) {
       s.weight = t.weight;
       s.reps = t.reps;
+      s.reps_r = split ? (t.reps_r ?? t.reps) : null;
       s.time = t.time ?? null;
       s.dist = t.dist ?? null;
       s.auto = t.weight !== null || t.reps !== null;
@@ -74,6 +78,7 @@ export function buildExercise(exerciseId: string, tpl?: TemplateExercise): Worko
     exercise_id: exerciseId,
     rest: tpl?.rest ?? (ex.rest || useSettings.getState().defaultRest),
     note: '',
+    split,
     sets,
   };
 }
@@ -157,6 +162,15 @@ export function moveExercise(weId: string, dir: -1 | 1) {
 }
 
 export const setExerciseNote = (weId: string, note: string) => mapEx(weId, (we) => ({ ...we, note }));
+
+/** Switch an exercise between one reps field and separate left / right reps. */
+export function setSplit(weId: string, split: boolean) {
+  mapEx(weId, (we) => ({
+    ...we,
+    split,
+    sets: we.sets.map((s) => ({ ...s, reps_r: split ? (s.reps_r ?? s.reps) : null })),
+  }));
+}
 export const setExerciseRest = (weId: string, rest: number) => mapEx(weId, (we) => ({ ...we, rest }));
 
 export function addSet(weId: string) {
@@ -166,6 +180,7 @@ export function addSet(weId: string) {
     if (last) {
       s.weight = last.weight;
       s.reps = last.reps;
+      s.reps_r = we.split ? (last.reps_r ?? last.reps) : null;
       s.time = last.time ?? null;
       s.dist = last.dist ?? null;
       s.auto = true;
@@ -215,8 +230,9 @@ export function toggleSet(weId: string, setId: string) {
   const filled: Partial<SetEntry> = {};
   if (ex.type === 'time' || ex.type === 'cardio') {
     if (!set.time) filled.time = ex.type === 'time' ? 60 : 10;
-  } else if (!set.reps) {
-    filled.reps = 10;
+  } else {
+    if (!set.reps) filled.reps = set.reps_r || 10;
+    if (we.split && !set.reps_r) filled.reps_r = filled.reps ?? set.reps ?? 10;
   }
   const done = { ...set, ...filled, done: true, done_at: nowIso() };
   const pr = detectPR(we.exercise_id, ex, done, w);
@@ -224,14 +240,14 @@ export function toggleSet(weId: string, setId: string) {
 
   if (pr.length) {
     haptic.celebrate();
-    const best = e1rm(done.weight, done.reps);
+    const best = e1rm(done.weight, topReps(done));
     useFx.getState().info(
       'NEW PERSONAL RECORD',
       pr.includes('e1rm')
         ? `${exName(ex)} — best 1RM ${fmtKg(Math.round(best * 100) / 100)} kg`
         : pr.includes('weight')
           ? `${exName(ex)} — heaviest set ${fmtKg(done.weight)} kg`
-          : `${exName(ex)} — most reps: ${done.reps}`,
+          : `${exName(ex)} — most reps: ${topReps(done)}`,
       { icon: 'trophy', ms: 3800 },
     );
   } else {
@@ -258,15 +274,15 @@ function detectPR(exerciseId: string, ex: ExerciseDef, s: SetEntry, w: ActiveWor
     if (we.exercise_id !== exerciseId) continue;
     for (const x of we.sets) {
       if (!isWorking(x) || x.id === s.id) continue;
-      rec.e1rm = Math.max(rec.e1rm, e1rm(x.weight, x.reps));
-      if ((x.reps ?? 0) > 0) rec.weight = Math.max(rec.weight, x.weight ?? 0);
-      rec.reps = Math.max(rec.reps, x.reps ?? 0);
+      rec.e1rm = Math.max(rec.e1rm, e1rm(x.weight, topReps(x)));
+      if (topReps(x) > 0) rec.weight = Math.max(rec.weight, x.weight ?? 0);
+      rec.reps = Math.max(rec.reps, topReps(x));
     }
   }
   const out: PRKind[] = [];
-  const e = e1rm(s.weight, s.reps);
+  const e = e1rm(s.weight, topReps(s));
   if (ex.type === 'bw_reps' && !(s.weight ?? 0)) {
-    if ((s.reps ?? 0) > rec.reps && rec.reps > 0) out.push('reps');
+    if (topReps(s) > rec.reps && rec.reps > 0) out.push('reps');
     return out;
   }
   if (e > rec.e1rm + 0.01 && rec.e1rm > 0) out.push('e1rm');
@@ -342,7 +358,8 @@ export function templateFromExercises(list: WorkoutExercise[]): TemplateExercise
     exercise_id: we.exercise_id,
     rest: we.rest,
     note: '',
-    sets: we.sets.map((s) => ({ type: s.type, weight: s.weight, reps: s.reps, time: s.time ?? null, dist: s.dist ?? null })),
+    split: we.split,
+    sets: we.sets.map((s) => ({ type: s.type, weight: s.weight, reps: s.reps, reps_r: s.reps_r ?? null, time: s.time ?? null, dist: s.dist ?? null })),
   }));
 }
 

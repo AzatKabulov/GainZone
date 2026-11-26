@@ -1,230 +1,210 @@
 /* eslint-disable react-hooks/refs -- imperative WebGL bridge: all mutable scene state lives in refs and is only touched from GL / gesture callbacks */
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { PanResponder, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { PanResponder, View, type GestureResponderEvent, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import * as THREE from 'three';
 
+import { BODY_MESH } from '@/data/bodyMesh';
 import type { MuscleId } from '@/data/muscles';
 
 /**
- * Procedural 3D anatomy figure (three.js on expo-gl, no model files).
- * Every muscle is its own mesh (vertex-coloured, so one mesh can hold several regions,
- * e.g. the three bands of the chest or the three heads of the delts).
- * Drag to rotate, tap a muscle to select it.
+ * Anatomical 3D figure (BodyParts3D muscles via open-anatomy-3d, CC BY 4.0), rendered with three.js on expo-gl.
+ * Every vertex carries a muscle region, so the whole body is one mesh that is recoloured on the fly.
+ * One finger rotates, two fingers zoom, a tap selects a muscle.
  */
 
+export const ANATOMY_CREDIT = 'Anatomy: BodyParts3D © DBCLS (CC BY 4.0) via open-anatomy-3d';
+
+const SKIN = 255;
+const UNDER = 254;
+const IDLE_LABEL = 253;
+
+interface Decoded {
+  geometry: THREE.BufferGeometry;
+  lab: Uint8Array;
+  lab2: Uint8Array;
+  blend: Uint8Array;
+  center: number;
+  height: number;
+}
+
+let cache: Decoded | null = null;
+
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+function decodeBase64(b64: string): Uint8Array {
+  if (typeof globalThis.atob === 'function') {
+    const bin = globalThis.atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  // fallback decoder (no atob)
+  const lut = new Uint8Array(128);
+  for (let i = 0; i < B64.length; i++) lut[B64.charCodeAt(i)] = i;
+  const pad = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+  const out = new Uint8Array((b64.length * 3) / 4 - pad);
+  let o = 0;
+  for (let i = 0; i < b64.length; i += 4) {
+    const n = (lut[b64.charCodeAt(i)] << 18) | (lut[b64.charCodeAt(i + 1)] << 12) | (lut[b64.charCodeAt(i + 2)] << 6) | lut[b64.charCodeAt(i + 3)];
+    if (o < out.length) out[o++] = (n >> 16) & 255;
+    if (o < out.length) out[o++] = (n >> 8) & 255;
+    if (o < out.length) out[o++] = n & 255;
+  }
+  return out;
+}
+
+/** Decode the packed mesh once per app run. */
+function getBody(): Decoded {
+  if (cache) return cache;
+  const M = BODY_MESH;
+  const bytes = decodeBase64(M.data);
+  const buf = bytes.buffer as ArrayBuffer;
+  let off = 0;
+  const take = <T,>(C: new (b: ArrayBuffer, o: number, n: number) => T, n: number, size: number) => {
+    const a = new C(buf, off, n);
+    off += size;
+    return a;
+  };
+  const V = M.vertexCount;
+  const pos = take(Int16Array, V * 3, M.sizes[0]);
+  const nor = take(Int8Array, V * 3, M.sizes[1]);
+  const lab = take(Uint8Array, V, M.sizes[2]);
+  const lab2 = take(Uint8Array, V, M.sizes[3]);
+  const blend = take(Uint8Array, V, M.sizes[4]);
+  const ind = M.bigIndex ? take(Uint32Array, M.indexCount, M.sizes[5]) : take(Uint16Array, M.indexCount, M.sizes[5]);
+  const P = new Float32Array(V * 3);
+  const N = new Float32Array(V * 3);
+  for (let i = 0; i < V; i++)
+    for (let a = 0; a < 3; a++) {
+      P[i * 3 + a] = M.min[a] + ((pos[i * 3 + a] + 32768) / 65535) * (M.max[a] - M.min[a]);
+      N[i * 3 + a] = nor[i * 3 + a] / 127;
+    }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(P, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+  geometry.setIndex(new THREE.BufferAttribute(ind, 1));
+  geometry.computeBoundingSphere();
+  cache = { geometry, lab, lab2, blend, center: (M.min[1] + M.max[1]) / 2, height: M.max[1] - M.min[1] };
+  return cache;
+}
+
+export interface BodyPalette {
+  skin: string;
+  under: string;
+  idle: string;
+}
+
+export const DARK_BODY: BodyPalette = { skin: '#26262B', under: '#121215', idle: '#4C4C55' };
+export const LIGHT_BODY: BodyPalette = { skin: '#9C968B', under: '#6E6A63', idle: '#C9C3B7' };
+
+function paint(geo: THREE.BufferGeometry, d: Decoded, colors: Partial<Record<MuscleId, string>>, palette: BodyPalette, selected: MuscleId | null) {
+  const muscles = BODY_MESH.muscles as MuscleId[];
+  const table: THREE.Color[] = [];
+  const white = new THREE.Color('#ffffff');
+  for (let i = 0; i < 256; i++) {
+    let c: THREE.Color;
+    if (i === SKIN) c = new THREE.Color(palette.skin);
+    else if (i === UNDER) c = new THREE.Color(palette.under);
+    else if (i === IDLE_LABEL || i >= muscles.length) c = new THREE.Color(palette.idle);
+    else {
+      const id = muscles[i];
+      c = new THREE.Color(colors[id] ?? palette.idle);
+      if (selected) c = id === selected ? c.lerp(white, 0.25) : c.multiplyScalar(0.5);
+    }
+    if (selected && i >= muscles.length) c.multiplyScalar(0.6);
+    table.push(c);
+  }
+  const col = geo.getAttribute('color') as THREE.BufferAttribute;
+  const arr = col.array as Float32Array;
+  const tmp = new THREE.Color();
+  for (let i = 0; i < d.lab.length; i++) {
+    tmp.copy(table[d.lab[i]]);
+    if (d.blend[i]) tmp.lerp(table[d.lab2[i]], (d.blend[i] / 255) * 0.5);
+    arr[i * 3] = tmp.r;
+    arr[i * 3 + 1] = tmp.g;
+    arr[i * 3 + 2] = tmp.b;
+  }
+  col.needsUpdate = true;
+}
+
 export interface Body3DProps {
-  colors: Record<MuscleId, string>;
-  base: string;
+  colors: Partial<Record<MuscleId, string>>;
+  palette: BodyPalette;
   background: string;
-  selected: MuscleId | null;
-  onSelect: (m: MuscleId | null) => void;
-  /** horizontal shift of the figure (−1 … 1), used to make room for the side panel */
+  selected?: MuscleId | null;
+  onSelect?: (m: MuscleId | null) => void;
+  /** horizontal shift of the figure (−1 … 1), used to make room for a side panel */
   shift?: number;
-  /** turn to face front (0) or back (π) when this changes */
+  /** turn to an angle (0 = front, π = back) when this changes */
   facing?: { angle: number; n: number };
+  /** start angle */
+  initialAngle?: number;
+  /** frame only the upper body / lower body */
+  focus?: 'full' | 'upper' | 'lower';
+  /** slow idle spin until touched */
+  autoRotate?: boolean;
   /** called with true when a drag starts and false when it ends (to lock a parent ScrollView) */
   onInteract?: (active: boolean) => void;
   style?: StyleProp<ViewStyle>;
 }
 
-type RegionFn = (p: THREE.Vector3, n: THREE.Vector3) => MuscleId;
+const FOCUS = {
+  full: { y: 0.02, dist: 3.85 },
+  upper: { y: 0.42, dist: 2.3 },
+  lower: { y: -0.32, dist: 2.9 },
+};
 
-interface Part {
-  mesh: THREE.Mesh;
-  region: RegionFn;
-}
-
-const v3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-
-/** Ellipsoid between two points (or at a point), radii in its local frame. */
-function ellipsoid(
-  radii: [number, number, number],
-  at: THREE.Vector3,
-  opts: { dir?: THREE.Vector3; rotZ?: number; rotX?: number; rotY?: number; seg?: number } = {},
-) {
-  const g = new THREE.SphereGeometry(1, opts.seg ?? 28, Math.round((opts.seg ?? 28) * 0.75));
-  g.scale(radii[0], radii[1], radii[2]);
-  const m = new THREE.Mesh(g);
-  m.position.copy(at);
-  if (opts.dir) {
-    m.quaternion.setFromUnitVectors(v3(0, 1, 0), opts.dir.clone().normalize());
-  }
-  if (opts.rotZ) m.rotateZ(opts.rotZ);
-  if (opts.rotX) m.rotateX(opts.rotX);
-  if (opts.rotY) m.rotateY(opts.rotY);
-  return m;
-}
-
-function capsule(a: THREE.Vector3, b: THREE.Vector3, r: number, scaleZ = 1) {
-  const len = a.distanceTo(b);
-  const g = new THREE.CapsuleGeometry(r, Math.max(0.001, len), 8, 20);
-  g.scale(1, 1, scaleZ);
-  const m = new THREE.Mesh(g);
-  m.position.copy(a.clone().add(b).multiplyScalar(0.5));
-  m.quaternion.setFromUnitVectors(v3(0, 1, 0), b.clone().sub(a).normalize());
-  return m;
-}
-
-const fixed = (id: MuscleId): RegionFn => () => id;
-
-function buildFigure(baseMat: THREE.Material) {
-  const root = new THREE.Group();
-  const parts: Part[] = [];
-
-  const addBase = (m: THREE.Mesh) => {
-    m.material = baseMat;
-    root.add(m);
-  };
-  const addMuscle = (m: THREE.Mesh, region: RegionFn) => {
-    const geo = m.geometry as THREE.BufferGeometry;
-    const count = geo.getAttribute('position').count;
-    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-    m.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.48, metalness: 0.08 });
-    root.add(m);
-    parts.push({ mesh: m, region });
-  };
-
-  /* ── skeleton of the figure (y up, ~1.8 tall, facing +z) ── */
-  const head = ellipsoid([0.088, 0.112, 0.1], v3(0, 1.74, 0.005));
-  addBase(head);
-  addBase(capsule(v3(0, 1.56, -0.01), v3(0, 1.66, 0), 0.052));
-  addBase(ellipsoid([0.185, 0.19, 0.115], v3(0, 1.36, -0.01))); // rib cage
-  addBase(ellipsoid([0.15, 0.15, 0.1], v3(0, 1.13, -0.005))); // waist
-  addBase(ellipsoid([0.165, 0.11, 0.11], v3(0, 0.95, -0.01))); // pelvis
-
-  for (const s of [-1, 1]) {
-    const sh = v3(0.215 * s, 1.47, -0.01);
-    const el = v3(0.29 * s, 1.18, -0.02);
-    const wr = v3(0.33 * s, 0.93, 0.02);
-    addBase(capsule(sh, el, 0.046));
-    addBase(capsule(el, wr, 0.037));
-    addBase(ellipsoid([0.032, 0.06, 0.02], v3(0.34 * s, 0.86, 0.025)));
-
-    const hip = v3(0.1 * s, 0.92, 0);
-    const knee = v3(0.11 * s, 0.5, 0.01);
-    const ankle = v3(0.115 * s, 0.1, -0.01);
-    addBase(capsule(hip, knee, 0.07));
-    addBase(capsule(knee, ankle, 0.046));
-    addBase(ellipsoid([0.045, 0.03, 0.1], v3(0.115 * s, 0.035, 0.04)));
-
-    const armDir = el.clone().sub(sh).normalize();
-    const foreDir = wr.clone().sub(el).normalize();
-    const thighDir = knee.clone().sub(hip).normalize();
-    const shinDir = ankle.clone().sub(knee).normalize();
-    const lerp = (a: THREE.Vector3, b: THREE.Vector3, t: number) => a.clone().lerp(b, t);
-
-    /* chest: one pec per side, three bands by height */
-    addMuscle(
-      ellipsoid([0.095, 0.072, 0.05], v3(0.088 * s, 1.385, 0.075), { rotZ: -0.12 * s, rotX: 0.12 }),
-      (p) => (p.y > 1.408 ? 'chest_upper' : p.y > 1.362 ? 'chest_mid' : 'chest_lower'),
-    );
-
-    /* delts: one cap, front / side / rear by the surface normal */
-    addMuscle(ellipsoid([0.066, 0.078, 0.07], v3(0.218 * s, 1.465, -0.008)), (_p, n) =>
-      n.z > 0.42 ? 'delts_front' : n.z < -0.42 ? 'delts_rear' : 'delts_side',
-    );
-
-    /* traps: neck slope + upper back diamond */
-    addMuscle(ellipsoid([0.085, 0.032, 0.045], v3(0.085 * s, 1.535, -0.035), { rotZ: -0.38 * s }), fixed('traps'));
-    addMuscle(ellipsoid([0.05, 0.11, 0.028], v3(0.035 * s, 1.43, -0.105), { rotZ: 0.18 * s }), fixed('traps'));
-
-    /* back */
-    addMuscle(ellipsoid([0.055, 0.075, 0.03], v3(0.075 * s, 1.37, -0.105), { rotZ: -0.3 * s }), fixed('upper_back'));
-    addMuscle(ellipsoid([0.07, 0.165, 0.045], v3(0.125 * s, 1.27, -0.06), { rotZ: 0.3 * s, rotY: -0.35 * s }), fixed('lats'));
-    addMuscle(ellipsoid([0.03, 0.1, 0.03], v3(0.035 * s, 1.12, -0.09)), fixed('lower_back'));
-
-    /* core */
-    for (let r = 0; r < 4; r++) {
-      const y = 1.245 - r * 0.068;
-      addMuscle(ellipsoid([0.03, r === 3 ? 0.038 : 0.029, 0.02], v3(0.034 * s, y, 0.1 - r * 0.003)), fixed('abs'));
-    }
-    addMuscle(ellipsoid([0.042, 0.1, 0.07], v3(0.115 * s, 1.12, 0.03), { rotZ: 0.12 * s }), fixed('obliques'));
-
-    /* arms */
-    addMuscle(ellipsoid([0.038, 0.095, 0.04], lerp(sh, el, 0.55).add(v3(0, 0, 0.03)), { dir: armDir }), fixed('biceps'));
-    addMuscle(ellipsoid([0.042, 0.105, 0.042], lerp(sh, el, 0.5).add(v3(0.006 * s, 0, -0.03)), { dir: armDir }), fixed('triceps'));
-    addMuscle(ellipsoid([0.043, 0.1, 0.042], lerp(el, wr, 0.33).add(v3(0, 0, 0.004)), { dir: foreDir }), fixed('forearms'));
-
-    /* legs */
-    addMuscle(ellipsoid([0.085, 0.085, 0.072], v3(0.085 * s, 0.93, -0.075)), fixed('glutes'));
-    addMuscle(ellipsoid([0.068, 0.18, 0.06], lerp(hip, knee, 0.48).add(v3(0.004 * s, 0, 0.032)), { dir: thighDir }), fixed('quads'));
-    addMuscle(ellipsoid([0.062, 0.17, 0.055], lerp(hip, knee, 0.5).add(v3(0, 0, -0.035)), { dir: thighDir }), fixed('hamstrings'));
-    addMuscle(ellipsoid([0.035, 0.12, 0.05], lerp(hip, knee, 0.33).add(v3(-0.045 * s, 0, 0)), { dir: thighDir }), fixed('adductors'));
-    addMuscle(ellipsoid([0.046, 0.115, 0.048], lerp(knee, ankle, 0.3).add(v3(0, 0, -0.022)), { dir: shinDir }), fixed('calves'));
-  }
-
-  // figure space: feet at y=0; the root lowers it so the body is centred in view
-  root.position.y = -0.9;
-  return { root, parts };
-}
-
-function paint(parts: Part[], colors: Record<MuscleId, string>, selected: MuscleId | null) {
-  const c = new THREE.Color();
-  const white = new THREE.Color('#ffffff');
-  const p = new THREE.Vector3();
-  const n = new THREE.Vector3();
-  const nm = new THREE.Matrix3();
-  for (const { mesh, region } of parts) {
-    // work in figure space (the mesh's local matrix relative to the figure root)
-    mesh.updateMatrix();
-    nm.getNormalMatrix(mesh.matrix);
-    const geo = mesh.geometry as THREE.BufferGeometry;
-    const pos = geo.getAttribute('position');
-    const nor = geo.getAttribute('normal');
-    const col = geo.getAttribute('color') as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) {
-      p.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrix);
-      n.fromBufferAttribute(nor, i).applyMatrix3(nm).normalize();
-      const id = region(p, n);
-      c.set(colors[id]);
-      if (selected && id === selected) c.lerp(white, 0.28);
-      else if (selected) c.multiplyScalar(0.55);
-      col.setXYZ(i, c.r, c.g, c.b);
-    }
-    col.needsUpdate = true;
-  }
-}
-
-export function Body3D({ colors, base, background, selected, onSelect, shift = 0, facing, onInteract, style }: Body3DProps) {
+export function Body3D({
+  colors,
+  palette,
+  background,
+  selected = null,
+  onSelect,
+  shift = 0,
+  facing,
+  initialAngle = 0.32,
+  focus = 'full',
+  autoRotate = false,
+  onInteract,
+  style,
+}: Body3DProps) {
   const [size, setSize] = useState({ w: 0, h: 0 });
   const st = useRef({
     renderer: null as THREE.WebGLRenderer | null,
     scene: null as THREE.Scene | null,
     camera: null as THREE.PerspectiveCamera | null,
-    figure: null as THREE.Group | null,
-    parts: [] as Part[],
-    gl: null as ExpoWebGLRenderingContext | null,
-    rotY: 0.35,
-    rotX: 0.04,
-    targetY: 0.35,
+    mesh: null as THREE.Mesh | null,
+    rotY: initialAngle,
+    targetY: NaN,
     velY: 0,
+    dist: FOCUS[focus].dist,
+    camY: FOCUS[focus].y,
     shift: 0,
     shiftTarget: 0,
+    spin: autoRotate,
     dirty: true,
-    raf: 0 as number,
-    baseMat: null as THREE.MeshStandardMaterial | null,
+    raf: 0,
     size: { w: 0, h: 0 },
+    pinch: 0,
   });
-  const props = useRef({ colors, selected, onSelect, base, background, onInteract });
+  const props = useRef({ colors, palette, selected, onSelect, background, onInteract });
   useLayoutEffect(() => {
-    props.current = { colors, selected, onSelect, base, background, onInteract };
+    props.current = { colors, palette, selected, onSelect, background, onInteract };
   });
 
-  // repaint muscles when colours / selection change
   useEffect(() => {
     const s = st.current;
-    if (!s.parts.length) return;
-    paint(s.parts, colors, selected);
+    if (!s.mesh) return;
+    paint(s.mesh.geometry, getBody(), colors, palette, selected);
     s.dirty = true;
-  }, [colors, selected]);
+  }, [colors, palette, selected]);
 
   useEffect(() => {
     const s = st.current;
-    s.baseMat?.color.set(base);
     if (s.scene?.background) (s.scene.background as THREE.Color).set(background);
     s.dirty = true;
-  }, [base, background]);
+  }, [background]);
 
   useEffect(() => {
     st.current.shiftTarget = shift;
@@ -234,13 +214,11 @@ export function Body3D({ colors, base, background, selected, onSelect, shift = 0
   useEffect(() => {
     if (!facing) return;
     const s = st.current;
-    // shortest turn to the requested side
     const full = Math.PI * 2;
-    let target = facing.angle;
     const cur = s.rotY;
-    target = cur + ((((target - cur) % full) + full + Math.PI) % full) - Math.PI;
-    s.targetY = target;
+    s.targetY = cur + ((((facing.angle - cur) % full) + full + Math.PI) % full) - Math.PI;
     s.velY = 0;
+    s.spin = false;
     s.dirty = true;
   }, [facing]);
 
@@ -249,27 +227,25 @@ export function Body3D({ colors, base, background, selected, onSelect, shift = 0
   function pick(x: number, y: number) {
     const s = st.current;
     const { w, h } = s.size;
-    if (!s.camera || !s.figure || !w) return;
-    s.figure.updateMatrixWorld(true);
+    if (!s.camera || !s.mesh || !w || !props.current.onSelect) return;
+    s.mesh.updateMatrixWorld(true);
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2((x / w) * 2 - 1, -(y / h) * 2 + 1), s.camera);
-    const hits = ray.intersectObjects(s.figure.children, false);
-    const hit = hits[0];
-    const part = hit ? s.parts.find((p) => p.mesh === hit.object) : undefined;
-    if (!hit || !part || !hit.face) {
-      props.current.onSelect(null);
-      return;
-    }
-    // hit point and face normal in figure space
-    const p = hit.point.clone().applyMatrix4(new THREE.Matrix4().copy(s.figure.matrixWorld).invert());
-    part.mesh.updateMatrix();
-    const nm = new THREE.Matrix3().getNormalMatrix(part.mesh.matrix);
-    const n = hit.face.normal.clone().applyMatrix3(nm).normalize();
-    const id = part.region(p, n);
-    props.current.onSelect(id === props.current.selected ? null : id);
+    const hit = ray.intersectObject(s.mesh, false)[0];
+    if (!hit?.face) return props.current.onSelect(null);
+    const l = getBody().lab[hit.face.a];
+    const muscles = BODY_MESH.muscles as MuscleId[];
+    const id = l < muscles.length ? muscles[l] : null;
+    props.current.onSelect(id && id !== props.current.selected ? id : null);
   }
 
-  const drag = useRef({ x: 0, y: 0, moved: 0, lastX: 0, lastT: 0 });
+  const touchDist = (e: GestureResponderEvent) => {
+    const t = e.nativeEvent.touches;
+    if (t.length < 2) return 0;
+    return Math.hypot(t[0].pageX - t[1].pageX, t[0].pageY - t[1].pageY);
+  };
+
+  const drag = useRef({ x: 0, y: 0, moved: 0, lastX: 0, lastY: 0, lastT: 0 });
   const [pan] = useState(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -281,22 +257,40 @@ export function Body3D({ colors, base, background, selected, onSelect, shift = 0
         d.y = e.nativeEvent.locationY;
         d.moved = 0;
         d.lastX = e.nativeEvent.pageX;
+        d.lastY = e.nativeEvent.pageY;
         d.lastT = e.nativeEvent.timestamp;
-        st.current.velY = 0;
-        st.current.targetY = NaN;
+        const s = st.current;
+        s.velY = 0;
+        s.targetY = NaN;
+        s.spin = false;
+        s.pinch = 0;
         props.current.onInteract?.(true);
       },
-      onPanResponderMove: (e, g) => {
+      onPanResponderMove: (e) => {
         const s = st.current;
         const d = drag.current;
+        const pd = touchDist(e);
+        if (pd) {
+          // pinch zoom
+          if (s.pinch) s.dist = Math.max(1.4, Math.min(5, s.dist * (s.pinch / pd)));
+          s.pinch = pd;
+          d.moved = 99;
+          s.dirty = true;
+          return;
+        }
+        s.pinch = 0;
         const dx = e.nativeEvent.pageX - d.lastX;
+        const dy = e.nativeEvent.pageY - d.lastY;
         const now = e.nativeEvent.timestamp;
         s.rotY += dx * 0.011;
-        s.rotX = Math.max(-0.35, Math.min(0.45, 0.04 + g.dy * 0.003));
-        s.velY = (dx * 0.011) / Math.max(1, now - d.lastT) * 16;
+        s.velY = ((dx * 0.011) / Math.max(1, now - d.lastT)) * 16;
+        // vertical drag pans when zoomed in
+        const zoom = Math.max(0, (3.85 - s.dist) / 2.4);
+        s.camY = Math.max(-0.75, Math.min(0.75, s.camY + dy * 0.0035 * (0.3 + zoom)));
         d.lastX = e.nativeEvent.pageX;
+        d.lastY = e.nativeEvent.pageY;
         d.lastT = now;
-        d.moved = Math.max(d.moved, Math.abs(g.dx) + Math.abs(g.dy));
+        d.moved += Math.abs(dx) + Math.abs(dy);
         s.dirty = true;
       },
       onPanResponderRelease: () => {
@@ -310,7 +304,6 @@ export function Body3D({ colors, base, background, selected, onSelect, shift = 0
 
   const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
     const s = st.current;
-    s.gl = gl;
     const w = gl.drawingBufferWidth;
     const h = gl.drawingBufferHeight;
     const canvas = {
@@ -328,46 +321,62 @@ export function Body3D({ colors, base, background, selected, onSelect, shift = 0
     renderer.setSize(w, h, false);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 1.1;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(props.current.background);
+    const camera = new THREE.PerspectiveCamera(28, w / h, 0.05, 20);
 
-    const camera = new THREE.PerspectiveCamera(30, w / h, 0.1, 20);
-    camera.position.set(0, 0.05, 4.1);
-    camera.lookAt(0, 0, 0);
-
-    scene.add(new THREE.HemisphereLight('#f2eee6', '#1a1a1d', 1.1));
-    const key = new THREE.DirectionalLight('#ffffff', 2.2);
-    key.position.set(1.6, 2.4, 3);
+    scene.add(new THREE.HemisphereLight('#f2eee6', '#141416', 1.0));
+    const key = new THREE.DirectionalLight('#ffffff', 2.4);
+    key.position.set(1.5, 2.5, 3);
     scene.add(key);
-    const fill = new THREE.DirectionalLight('#cfd8ff', 0.6);
-    fill.position.set(-2.5, 0.5, 1.5);
+    const fill = new THREE.DirectionalLight('#bcc8ff', 0.7);
+    fill.position.set(-2.5, 0.8, 1.5);
     scene.add(fill);
-    const rim = new THREE.DirectionalLight('#ffffff', 1.6);
-    rim.position.set(0, 1.5, -3);
+    const rim = new THREE.DirectionalLight('#ffffff', 2.0);
+    rim.position.set(-0.5, 1.8, -3);
     scene.add(rim);
 
-    const baseMat = new THREE.MeshStandardMaterial({ color: props.current.base, roughness: 0.72, metalness: 0.05 });
-    const { root, parts } = buildFigure(baseMat);
-    scene.add(root);
-    paint(parts, props.current.colors, props.current.selected);
+    const body = getBody();
+    // shared positions / normals / indices, own colours (several figures can be on screen)
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', body.geometry.getAttribute('position'));
+    geo.setAttribute('normal', body.geometry.getAttribute('normal'));
+    geo.setIndex(body.geometry.getIndex());
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(body.lab.length * 3), 3));
+    geo.boundingSphere = body.geometry.boundingSphere;
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.1 });
+    mat.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace(
+        '#include <dithering_fragment>',
+        `#include <dithering_fragment>
+        float fres = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
+        gl_FragColor.rgb += fres * vec3(0.14, 0.15, 0.18);`,
+      );
+    };
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.y = -body.center;
+    paint(geo, body, props.current.colors, props.current.palette, props.current.selected ?? null);
+    scene.add(mesh);
 
-    // soft floor disc
+    // soft floor shadow
     const disc = new THREE.Mesh(
-      new THREE.CircleGeometry(0.42, 48),
-      new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.35 }),
+      new THREE.CircleGeometry(0.36, 48),
+      new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.4 }),
     );
     disc.rotation.x = -Math.PI / 2;
-    disc.position.y = -0.9;
+    disc.position.y = -body.center + 0.002;
     scene.add(disc);
 
-    Object.assign(s, { renderer, scene, camera, figure: root, parts, baseMat, dirty: true });
+    Object.assign(s, { renderer, scene, camera, mesh, dirty: true });
 
     const loop = () => {
       s.raf = requestAnimationFrame(loop);
-      // inertia / auto-turn
-      if (!Number.isNaN(s.targetY)) {
+      if (s.spin) {
+        s.rotY += 0.004;
+        s.dirty = true;
+      } else if (!Number.isNaN(s.targetY)) {
         const d = s.targetY - s.rotY;
         if (Math.abs(d) > 0.002) {
           s.rotY += d * 0.14;
@@ -384,9 +393,10 @@ export function Body3D({ colors, base, background, selected, onSelect, shift = 0
       }
       if (!s.dirty) return;
       s.dirty = false;
-      root.rotation.set(s.rotX, s.rotY, 0);
-      root.position.x = s.shift * 0.55;
-      disc.position.x = root.position.x;
+      mesh.rotation.y = s.rotY;
+      disc.position.x = mesh.position.x = s.shift * 0.5 * (s.dist / 3.85);
+      camera.position.set(0, s.camY + 0.03, s.dist);
+      camera.lookAt(0, s.camY, 0);
       renderer.render(scene, camera);
       gl.endFrameEXP();
     };

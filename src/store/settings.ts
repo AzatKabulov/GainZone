@@ -18,8 +18,6 @@ interface SettingsState {
   keepAwake: boolean;
   /** Fill set inputs with what you did last time. */
   prefill: boolean;
-  /** Language of exercise names. */
-  exLang: 'en' | 'ru';
   /** Default rest between sets, seconds. */
   defaultRest: number;
   /** Period of the muscle map, days (0 = all time). */
@@ -39,7 +37,6 @@ export const useSettings = create<SettingsState>()(
       sound: true,
       keepAwake: true,
       prefill: true,
-      exLang: 'en',
       defaultRest: 120,
       bodyPeriod: 7,
       hydrated: false,

@@ -5,9 +5,9 @@ import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import type { ExerciseDef } from '@/data/exerciseTypes';
 import { HEAT_COLORS, HEAT_COLORS_LIGHT, HEAT_LABEL, type HeatLevel, type MuscleId } from '@/data/muscles';
-import { exImages } from '@/lib/exercise';
+import { exImage } from '@/lib/exercise';
 import { alpha, fonts, useTheme } from '@/theme';
-import { BodyMap } from './BodyMap';
+import { DARK_BODY, LIGHT_BODY } from './Body3D';
 import { Press, Txt } from './ui';
 
 export function SheetHeader({
@@ -107,15 +107,10 @@ export function HeatLegend({ compact }: { compact?: boolean }) {
   );
 }
 
-/** Square thumbnail: demo photo if we have one, otherwise the muscle map. */
+/** Square 3D thumbnail of the working muscles (custom exercises get an icon). */
 export function ExerciseThumb({ ex, size = 48 }: { ex: ExerciseDef; size?: number }) {
-  const { c, accent } = useTheme();
-  const img = exImages(ex.id);
-  const colors: Partial<Record<MuscleId, string>> = {};
-  for (const [m, v] of Object.entries(ex.m) as [MuscleId, number][]) {
-    if (v >= 25) colors[m] = accent;
-    else if (v >= 10) colors[m] = alpha(accent, 0.45);
-  }
+  const { c } = useTheme();
+  const img = exImage(ex.id);
   return (
     <View
       style={{
@@ -131,25 +126,35 @@ export function ExerciseThumb({ ex, size = 48 }: { ex: ExerciseDef; size?: numbe
       }}
     >
       {img ? (
-        <Image source={img[1]} style={{ width: size, height: size }} contentFit="cover" transition={120} />
+        <Image source={img} style={{ width: size, height: size }} contentFit="cover" transition={100} />
       ) : (
-        <BodyMap colors={colors} view={frontOrBack(ex)} height={size - 6} />
+        <Ionicons name="barbell-outline" size={size * 0.45} color={c.textFaint} />
       )}
     </View>
   );
 }
 
-const BACK_SIDE: MuscleId[] = ['lats', 'upper_back', 'lower_back', 'triceps', 'delts_rear', 'glutes', 'hamstrings', 'traps'];
+/** Body colours for the 3D figure in the current theme. */
+export function useBodyPalette() {
+  const { isDark } = useTheme();
+  return isDark ? DARK_BODY : LIGHT_BODY;
+}
 
-/** Which side of the body shows this exercise best. */
-export function frontOrBack(ex: ExerciseDef): 'front' | 'back' {
-  let f = 0;
-  let b = 0;
+/** Primary muscles in the accent, secondary dimmed. */
+export function exerciseColors(ex: ExerciseDef, accent: string, idle: string): Partial<Record<MuscleId, string>> {
+  const out: Partial<Record<MuscleId, string>> = {};
   for (const [m, v] of Object.entries(ex.m) as [MuscleId, number][]) {
-    if (BACK_SIDE.includes(m)) b += v;
-    else f += v;
+    if (v >= 25) out[m] = accent;
+    else if (v >= 10) out[m] = mix(idle, accent, 0.5);
+    else if (v > 0) out[m] = mix(idle, accent, 0.22);
   }
-  return b > f ? 'back' : 'front';
+  return out;
+}
+
+function mix(a: string, b: string, t: number): string {
+  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, '0')).join('');
 }
 
 /** Small coloured pill. */

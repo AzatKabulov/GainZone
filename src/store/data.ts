@@ -42,7 +42,10 @@ export interface SetEntry {
   type: SetType;
   /** kg (+kg for bodyweight moves, −kg of assistance for the assisted machine) */
   weight: number | null;
+  /** reps (left side when the exercise is logged per side) */
   reps: number | null;
+  /** right side reps (one-arm / one-leg exercises) */
+  reps_r?: number | null;
   /** seconds (time) or minutes (cardio) */
   time?: number | null;
   /** km (cardio) */
@@ -61,6 +64,8 @@ export interface WorkoutExercise {
   rest: number;
   /** note for this exercise in this session */
   note: string;
+  /** log left / right reps separately */
+  split?: boolean;
   sets: SetEntry[];
 }
 
@@ -68,6 +73,7 @@ export interface TemplateSet {
   type: SetType;
   weight: number | null;
   reps: number | null;
+  reps_r?: number | null;
   time?: number | null;
   dist?: number | null;
 }
@@ -78,6 +84,7 @@ export interface TemplateExercise {
   rest: number;
   /** pinned note, shown every session */
   note: string;
+  split?: boolean;
   sets: TemplateSet[];
 }
 

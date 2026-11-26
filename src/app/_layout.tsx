@@ -86,7 +86,7 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.c.bg } }}>
           <Stack.Protected guard={signedIn}>
             <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="workout" options={{ ...sheet, gestureEnabled: true }} />
+            <Stack.Screen name="workout" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
             <Stack.Screen name="routine/[id]" options={sheet} />
             <Stack.Screen name="pick" options={sheet} />
             <Stack.Screen name="exercise/[id]" options={sheet} />

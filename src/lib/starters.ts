@@ -69,7 +69,8 @@ export function addStarter(key: string): string | null {
     exercise_id: id,
     rest: rest ?? getExercise(id).rest,
     note: '',
-    sets: sets.map(([weight, reps]): TemplateSet => ({ type: 'normal', weight, reps })),
+    split: !!getExercise(id).uni,
+    sets: sets.map(([weight, reps]): TemplateSet => ({ type: 'normal', weight, reps, reps_r: getExercise(id).uni ? reps : null })),
   }));
   const row = useData.getState().create('templates', { name: st.name, note: st.note, exercises, sort_order: Date.now() });
   return row.id;

@@ -3,15 +3,14 @@ import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BodyMapPair } from '@/components/BodyMap';
 import { FieldLabel, SheetHeader } from '@/components/kit';
-import { Button, Card, Chip, Input, Txt } from '@/components/ui';
+import { Button, Card, Chip, Input } from '@/components/ui';
 import { EQUIP_NAME, type Equip, type LogType } from '@/data/exerciseTypes';
 import { GROUPS, MUSCLE_IDS, MUSCLES, type GroupId, type MuscleId } from '@/data/muscles';
 import { haptic } from '@/lib/haptics';
 import { useData } from '@/store/data';
 import { useFx } from '@/store/fx';
-import { alpha, useTheme } from '@/theme';
+import { useTheme } from '@/theme';
 
 const TYPES: { id: LogType; label: string }[] = [
   { id: 'weight_reps', label: 'KG × REPS' },
@@ -22,16 +21,14 @@ const TYPES: { id: LogType; label: string }[] = [
 ];
 
 export default function NewExercise() {
-  const { c, accent } = useTheme();
+  const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
-  const [nameRu, setNameRu] = useState('');
   const [group, setGroup] = useState<GroupId>('chest');
   const [equip, setEquip] = useState<Equip>('machine');
   const [type, setType] = useState<LogType>('weight_reps');
   const [primary, setPrimary] = useState<MuscleId[]>([]);
   const [secondary, setSecondary] = useState<MuscleId[]>([]);
-  const [notes, setNotes] = useState('');
 
   const toggle = (m: MuscleId) => {
     haptic.tap();
@@ -42,25 +39,21 @@ export default function NewExercise() {
     else setPrimary((p) => [...p, m]);
   };
 
-  const colors: Partial<Record<MuscleId, string>> = {};
-  primary.forEach((m) => (colors[m] = accent));
-  secondary.forEach((m) => (colors[m] = alpha(accent, 0.45)));
-
   const save = () => {
-    if (!name.trim() && !nameRu.trim()) return haptic.warning();
+    if (!name.trim()) return haptic.warning();
     const muscles: Partial<Record<MuscleId, number>> = {};
     const pShare = secondary.length ? 70 : 100;
     primary.forEach((m) => (muscles[m] = Math.round(pShare / primary.length)));
     secondary.forEach((m) => (muscles[m] = Math.round((100 - (primary.length ? pShare : 0)) / secondary.length)));
     const row = useData.getState().create('exercises', {
-      name: name.trim() || nameRu.trim(),
-      name_ru: nameRu.trim() || name.trim(),
+      name: name.trim(),
+      name_ru: '',
       grp: group,
       equip,
       log_type: type,
       muscles,
       rest: primary.length > 1 ? 150 : 90,
-      notes: notes.trim(),
+      notes: '',
     });
     haptic.success();
     useFx.getState().info('EXERCISE CREATED', row.name);
@@ -71,10 +64,8 @@ export default function NewExercise() {
     <View style={{ flex: 1, backgroundColor: c.bgElevated }}>
       <SheetHeader kicker="NEW" title="EXERCISE" onClose={() => router.back()} />
       <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 30 }}>
-        <FieldLabel>NAME (EN)</FieldLabel>
+        <FieldLabel>NAME</FieldLabel>
         <Input value={name} onChangeText={setName} placeholder="Hammer Strength Row" autoFocus />
-        <FieldLabel style={{ marginTop: 14 }}>NAME (RU)</FieldLabel>
-        <Input value={nameRu} onChangeText={setNameRu} placeholder="Тяга в хаммере" />
 
         <FieldLabel style={{ marginTop: 18 }}>CATEGORY</FieldLabel>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -97,10 +88,9 @@ export default function NewExercise() {
           ))}
         </View>
 
-        <FieldLabel style={{ marginTop: 18 }}>MUSCLES · TAP ONCE = PRIMARY, TWICE = SECONDARY</FieldLabel>
+        <FieldLabel style={{ marginTop: 18 }}>MUSCLES · TAP = MAIN · AGAIN = HELPER</FieldLabel>
         <Card>
-          <BodyMapPair colors={colors} height={200} onPress={toggle} />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {MUSCLE_IDS.map((m) => (
               <Chip
                 key={m}
@@ -113,13 +103,7 @@ export default function NewExercise() {
           </View>
         </Card>
 
-        <FieldLabel style={{ marginTop: 18 }}>TECHNIQUE NOTES</FieldLabel>
-        <Input value={notes} onChangeText={setNotes} placeholder="Setup, cues…" multiline />
-
-        <Txt variant="small" color={c.textFaint} style={{ marginTop: 12 }}>
-          Primary muscles share 70% of the work, secondary 30%.
-        </Txt>
-        <Button label="CREATE EXERCISE" icon="checkmark" onPress={save} style={{ marginTop: 18 }} disabled={!name.trim() && !nameRu.trim()} />
+        <Button label="CREATE EXERCISE" icon="checkmark" onPress={save} style={{ marginTop: 22 }} disabled={!name.trim()} />
       </ScrollView>
     </View>
   );

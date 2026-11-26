@@ -1,4 +1,4 @@
-import type { ExerciseDef, LogType } from '@/data/exerciseTypes';
+import type { LogType } from '@/data/exerciseTypes';
 import { MUSCLE_IDS, setCredit, type MuscleId } from '@/data/muscles';
 import { addDays, dateKey, startOfWeek, todayKey } from '@/lib/date';
 import type { SetEntry, Workout, WorkoutExercise } from '@/store/data';
@@ -17,9 +17,14 @@ export function e1rm(weight: number | null | undefined, reps: number | null | un
   return w * (1 + r / 30);
 }
 
+/** Reps of a set (left + right for one-side exercises). */
+export const setReps = (s: SetEntry) => (s.reps ?? 0) + (s.reps_r ?? 0);
+/** Best side's reps (used for 1RM / PRs). */
+export const topReps = (s: SetEntry) => Math.max(s.reps ?? 0, s.reps_r ?? 0);
+
 export function setVolume(s: SetEntry, type: LogType): number {
   if (!s.done || s.type === 'warmup') return 0;
-  if (type === 'weight_reps' || type === 'bw_reps') return (s.weight ?? 0) * (s.reps ?? 0);
+  if (type === 'weight_reps' || type === 'bw_reps') return (s.weight ?? 0) * setReps(s);
   return 0;
 }
 
@@ -31,7 +36,7 @@ export function exerciseTotals(we: WorkoutExercise) {
   for (const s of we.sets) {
     if (!isWorking(s)) continue;
     sets++;
-    reps += s.reps ?? 0;
+    reps += setReps(s);
     volume += setVolume(s, ex.type);
   }
   return { sets, reps, volume };
@@ -108,16 +113,16 @@ export function exerciseRecords(sessions: Session[], type: LogType): Records {
     let vol = 0;
     for (const s of we.sets) {
       if (!isWorking(s)) continue;
-      const e = e1rm(s.weight, s.reps);
+      const e = e1rm(s.weight, topReps(s));
       if (e > r.e1rm) {
         r.e1rm = e;
         r.e1rmAt = workout.started_at;
       }
-      if ((s.weight ?? 0) > r.weight && (s.reps ?? 0) > 0) {
+      if ((s.weight ?? 0) > r.weight && topReps(s) > 0) {
         r.weight = s.weight ?? 0;
         r.weightAt = workout.started_at;
       }
-      if ((s.reps ?? 0) > r.reps) r.reps = s.reps ?? 0;
+      if (topReps(s) > r.reps) r.reps = topReps(s);
       const v = setVolume(s, type);
       if (v > r.setVolume) r.setVolume = v;
       vol += v;
@@ -142,27 +147,13 @@ export function bestSet(we: WorkoutExercise): SetEntry | null {
   let score = -1;
   for (const s of we.sets) {
     if (!isWorking(s)) continue;
-    const v = e1rm(s.weight, s.reps) || (s.reps ?? 0) || (s.time ?? 0);
+    const v = e1rm(s.weight, topReps(s)) || topReps(s) || (s.time ?? 0);
     if (v > score) {
       score = v;
       best = s;
     }
   }
   return best;
-}
-
-/** Suggestion for today based on last time (double progression). */
-export function progressionHint(prev: Session | null, ex: ExerciseDef): string | null {
-  if (!prev || ex.type === 'time' || ex.type === 'cardio') return null;
-  const work = prev.we.sets.filter(isWorking);
-  if (!work.length) return null;
-  const top = work.reduce((a, b) => ((b.weight ?? 0) > (a.weight ?? 0) ? b : a), work[0]);
-  const w = top.weight ?? 0;
-  const r = top.reps ?? 0;
-  if (ex.type === 'assisted') return `BEAT ${fmtKg(w)} × ${r} — TRY ${fmtKg(Math.max(0, w - 2.5))} × ${r}`;
-  const step = ex.equip === 'dumbbell' ? 2 : ex.equip === 'barbell' || ex.equip === 'smith' ? 2.5 : 2.5;
-  if (r >= 12) return `LAST ${fmtKg(w)} × ${r} → GO ${fmtKg(w + step)} × ${Math.max(6, r - 4)}`;
-  return `LAST ${fmtKg(w)} × ${r} → BEAT IT: ${fmtKg(w)} × ${r + 1}`;
 }
 
 /* ─────────────────────────── muscles ─────────────────────────── */
@@ -196,7 +187,7 @@ export function addExerciseToMuscles(stats: Record<MuscleId, MuscleStat>, we: Wo
     if (credit === 1) st.direct += working.length;
     else st.indirect += working.length;
     for (const s of working) {
-      st.reps += (s.reps ?? 0) * credit;
+      st.reps += setReps(s) * credit;
       st.volume += setVolume(s, ex.type) * (pct / 100);
     }
     if (!st.lastAt || at > st.lastAt) st.lastAt = at;
@@ -308,12 +299,18 @@ export function fmtDur(sec: number): string {
   return `${r}M`;
 }
 
+/** '9' or '9/10' (left/right). */
+export function fmtReps(s: { reps: number | null; reps_r?: number | null }): string {
+  return s.reps_r !== null && s.reps_r !== undefined ? `${s.reps ?? 0}/${s.reps_r}` : `${s.reps ?? 0}`;
+}
+
 export function fmtSetValue(s: SetEntry, type: LogType): string {
   if (type === 'time') return `${s.time ?? 0}s`;
   if (type === 'cardio') return `${s.time ?? 0} min${s.dist ? ` · ${fmtKg(s.dist)} km` : ''}`;
-  if (type === 'bw_reps') return s.weight ? `+${fmtKg(s.weight)}kg × ${s.reps ?? 0}` : `${s.reps ?? 0} reps`;
-  if (type === 'assisted') return `−${fmtKg(s.weight)}kg × ${s.reps ?? 0}`;
-  return `${fmtKg(s.weight)}kg × ${s.reps ?? 0}`;
+  if (type === 'bw_reps') return s.weight ? `+${fmtKg(s.weight)}kg × ${fmtReps(s)}` : `${fmtReps(s)} reps`;
+  if (type === 'assisted') return `−${fmtKg(s.weight)}kg × ${fmtReps(s)}`;
+  if (s.weight === null || s.weight === undefined) return `${fmtReps(s)} reps`;
+  return `${fmtKg(s.weight)}kg × ${fmtReps(s)}`;
 }
 
 export const FEELINGS = [

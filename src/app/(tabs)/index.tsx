@@ -6,7 +6,7 @@ import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated'
 
 import { HeaderBar } from '@/components/HeaderBar';
 import { Button, Empty, IconBtn, Press, Screen, ScreenTitle, Section, TAB_BAR_SPACE, Txt } from '@/components/ui';
-import { BodyMap } from '@/components/BodyMap';
+import { ExerciseThumb } from '@/components/kit';
 import { addDays, dateKey, diffDays, relativeLabel, startOfWeek, todayKey } from '@/lib/date';
 import { getExercise, useExName } from '@/lib/exercise';
 import { haptic } from '@/lib/haptics';
@@ -19,7 +19,6 @@ import { useData, type Template } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { useSettings } from '@/store/settings';
 import { alpha, fonts, useTheme } from '@/theme';
-import type { MuscleId } from '@/data/muscles';
 
 export default function TrainScreen() {
   const { c, accent } = useTheme();
@@ -100,13 +99,7 @@ export default function TrainScreen() {
         <Section label="ROUTINES" count={list.length} action="+ NEW" onAction={() => router.push('/routine/new')} style={{ marginTop: 26, marginBottom: 12 }} />
 
         {list.length === 0 ? (
-          <Empty
-            icon="barbell-outline"
-            title="NO ROUTINES YET"
-            text="Build your Day 1, Day 2… once. Start any of them in one tap."
-            action="CREATE ROUTINE"
-            onAction={() => router.push('/routine/new')}
-          />
+          <Empty icon="barbell-outline" title="NO ROUTINES YET" action="CREATE ROUTINE" onAction={() => router.push('/routine/new')} />
         ) : (
           <View style={{ gap: 10 }}>
             {list.map((t, i) => (
@@ -117,7 +110,7 @@ export default function TrainScreen() {
           </View>
         )}
 
-        <Starters existing={list.map((t) => t.name)} />
+        {list.length === 0 ? <Starters existing={[]} /> : null}
 
         {history.length ? (
           <>
@@ -189,17 +182,10 @@ function WeekStrip({ doneDays }: { doneDays: Set<string> }) {
 }
 
 function RoutineCard({ t, onStart }: { t: Template; onStart: () => void }) {
-  const { c, accent } = useTheme();
+  const { c } = useTheme();
   const exName = useExName();
   const sets = t.exercises.reduce((a, e) => a + e.sets.length, 0);
   const lastDays = t.last_used_at ? diffDays(dateKey(new Date(t.last_used_at)), todayKey()) : null;
-  const muscles: Partial<Record<MuscleId, string>> = {};
-  for (const te of t.exercises) {
-    for (const [m, v] of Object.entries(getExercise(te.exercise_id).m) as [MuscleId, number][]) {
-      if (v >= 25) muscles[m] = accent;
-      else if (v >= 10 && !muscles[m]) muscles[m] = alpha(accent, 0.4);
-    }
-  }
   const menu = () =>
     openMenu(t.name, [
       { label: 'Edit routine', onPress: () => router.push(`/routine/${t.id}`) },
@@ -230,11 +216,14 @@ function RoutineCard({ t, onStart }: { t: Template; onStart: () => void }) {
             {lastDays !== null ? ` · ${lastDays === 0 ? 'TODAY' : `${lastDays}D AGO`}` : ''}
           </Txt>
         </View>
-        <View style={{ flexDirection: 'row', gap: 2, opacity: 0.95 }}>
-          <BodyMap colors={muscles} view="front" height={74} />
-          <BodyMap colors={muscles} view="back" height={74} />
-        </View>
       </View>
+      {t.exercises.length ? (
+        <View style={{ flexDirection: 'row', gap: 6, marginTop: 12 }}>
+          {t.exercises.slice(0, 6).map((e) => (
+            <ExerciseThumb key={e.id} ex={getExercise(e.exercise_id)} size={40} />
+          ))}
+        </View>
+      ) : null}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
         <Button label="START" icon="play" small onPress={onStart} style={{ flex: 1 }} />
         <IconBtn icon="ellipsis-horizontal" onPress={menu} />
