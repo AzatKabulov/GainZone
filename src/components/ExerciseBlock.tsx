@@ -2,30 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Text, TextInput, View } from 'react-native';
-import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
 import type { ExerciseDef } from '@/data/exerciseTypes';
-import { LOG_COLS, exName, useExercise } from '@/lib/exercise';
+import { LOG_COLS, exImage, exName, useExercise } from '@/lib/exercise';
 import { haptic } from '@/lib/haptics';
 import { openMenu } from '@/lib/menu';
 import { setPickHandler } from '@/lib/pick';
 import { exerciseSessions, finishedWorkouts, fmtKg, fmtReps, previousForSets, recentNotes } from '@/lib/stats';
-import {
-  addSet,
-  moveExercise,
-  pinnedNote,
-  removeExercise,
-  removeSet,
-  replaceExercise,
-  setExerciseRest,
-  setSplit,
-  toggleSet,
-  updateSet,
-} from '@/lib/workout';
+import { addSet, moveExercise, pinnedNote, removeExercise, removeSet, replaceExercise, setSplit, toggleSet, updateSet } from '@/lib/workout';
 import { useData, type SetEntry, type WorkoutExercise } from '@/store/data';
 import { alpha, fonts, useTheme } from '@/theme';
-import { Checkbox } from './Checkbox';
-import { ExerciseThumb } from './kit';
+import { Image } from 'expo-image';
+import { fmtRestLong } from './RestSheet';
 import { Press, Txt } from './ui';
 
 export const KB_ACCESSORY = 'gain-kb';
@@ -33,9 +22,9 @@ export const REST_PRESETS = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300];
 export const fmtRest = (s: number) => (s === 0 ? 'OFF' : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
 
 const SET_LABEL: Record<SetEntry['type'], string> = { normal: '', warmup: 'W', drop: 'D', failure: 'F' };
-const W = { set: 32, kg: 62, reps: 54, side: 44, check: 34, gap: 6 };
+const W = { set: 40, kg: 70, reps: 62, kgSplit: 62, side: 50, check: 40, gap: 8 };
 
-/** One exercise in the live workout. */
+/** One exercise in the live workout — laid out like Hevy, styled like the *ZONE apps. */
 export const ExerciseBlock = memo(function ExerciseBlock({
   we,
   workoutId,
@@ -43,6 +32,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   index,
   count,
   onNote,
+  onRest,
 }: {
   we: WorkoutExercise;
   workoutId: string;
@@ -50,6 +40,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   index: number;
   count: number;
   onNote: (weId: string) => void;
+  onRest: (weId: string) => void;
 }) {
   const { c, accent } = useTheme();
   const ex = useExercise(we.exercise_id);
@@ -62,6 +53,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   const single = ex.type === 'time';
   const canSplit = ex.type === 'weight_reps' || ex.type === 'bw_reps' || ex.type === 'assisted';
   const split = !!we.split && canSplit;
+  const img = exImage(ex.id);
   let workIdx = 0;
 
   const menu = () =>
@@ -80,53 +72,57 @@ export const ExerciseBlock = memo(function ExerciseBlock({
       { label: 'Remove exercise', destructive: true, onPress: () => removeExercise(we.id) },
     ]);
 
-  const restMenu = () =>
-    openMenu(
-      'Rest timer',
-      REST_PRESETS.map((s) => ({ label: (s === 0 ? 'Off' : fmtRest(s)) + (s === we.rest ? '  ✓' : ''), onPress: () => setExerciseRest(we.id, s) })),
-    );
-
   const noteLine = we.note || pinned || lastNote?.text;
-  const noteIcon = we.note ? 'create' : pinned ? 'pin' : 'time-outline';
 
   return (
-    <View style={{ marginHorizontal: 12, marginTop: 12, paddingVertical: 14, borderRadius: 18, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
+    <View style={{ paddingTop: 22, paddingBottom: 6 }}>
       {/* header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 }}>
         <Press scaleTo={0.94} onPress={() => router.push(`/exercise/${ex.id}`)}>
-          <ExerciseThumb ex={ex} size={42} />
+          <View style={{ width: 46, height: 46, borderRadius: 23, overflow: 'hidden', backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
+            {img ? <Image source={img} style={{ width: 46, height: 46 }} contentFit="cover" /> : <Ionicons name="barbell-outline" size={20} color={c.textFaint} />}
+          </View>
         </Press>
         <Press style={{ flex: 1 }} scaleTo={0.98} onPress={() => router.push(`/exercise/${ex.id}`)}>
-          <Text numberOfLines={2} style={{ fontFamily: fonts.semibold, fontSize: 16, lineHeight: 20, color: c.text }}>
+          <Text numberOfLines={2} style={{ fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23, color: accent }}>
             {exName(ex)}
           </Text>
         </Press>
-        <Press hitSlop={6} onPress={menu} scaleTo={0.9} style={{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: c.surface2 }}>
-          <Ionicons name="ellipsis-horizontal" size={18} color={c.text} />
+        <Press hitSlop={8} onPress={menu} scaleTo={0.9} style={{ width: 36, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="ellipsis-vertical" size={20} color={c.text} />
         </Press>
       </View>
 
-      {/* small controls, Hevy-style */}
-      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 14, marginTop: 12 }}>
-        <Pill icon="timer-outline" label={fmtRest(we.rest)} active={we.rest > 0} onPress={restMenu} />
-        <Pill icon={we.note ? 'create' : 'create-outline'} label="Note" active={!!we.note} onPress={() => onNote(we.id)} />
-        {split ? <Pill icon="git-compare-outline" label="L / R" active onPress={() => setSplit(we.id, false)} /> : null}
+      {/* Rest / Note buttons */}
+      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 12 }}>
+        <Chip icon="timer-outline" label={`Rest: ${we.rest ? fmtRestLong(we.rest) : 'OFF'}`} active={we.rest > 0} onPress={() => onRest(we.id)} />
+        <Chip icon={we.note ? 'document-text' : 'document-text-outline'} label="Note" active={!!we.note} onPress={() => onNote(we.id)} />
+        {split ? <Chip icon="git-compare-outline" label="L / R" active onPress={() => setSplit(we.id, false)} /> : null}
       </View>
 
       {noteLine ? (
-        <Press onPress={() => onNote(we.id)} scaleTo={0.99} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, marginTop: 10 }}>
-          <Ionicons name={noteIcon} size={12} color={we.note ? accent : c.textFaint} />
-          <Text numberOfLines={1} style={{ flex: 1, fontFamily: fonts.body, fontSize: 13, color: we.note ? c.text : c.textDim }}>
+        <Press onPress={() => onNote(we.id)} scaleTo={0.99} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, marginTop: 10 }}>
+          <Ionicons name={we.note ? 'document-text' : pinned ? 'pin' : 'time-outline'} size={13} color={we.note ? accent : c.textFaint} />
+          <Text numberOfLines={1} style={{ flex: 1, fontFamily: fonts.body, fontSize: 13.5, color: we.note ? c.text : c.textDim }}>
             {noteLine}
           </Text>
         </Press>
       ) : null}
 
       {/* table header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, marginTop: 14, marginBottom: 4, gap: W.gap }}>
-        <Head w={W.set}>SET</Head>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginTop: 16, marginBottom: 4, gap: W.gap }}>
+        <Head w={W.set} center>
+          SET
+        </Head>
         <Head flex>PREVIOUS</Head>
-        {!single ? <Head w={W.kg} center>{cols[0]}</Head> : null}
+        {!single ? (
+          <View style={{ width: split ? W.kgSplit : W.kg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+            {ex.type === 'weight_reps' ? <Ionicons name="barbell" size={12} color={c.textDim} /> : null}
+            <Txt variant="label" style={{ fontSize: 10, letterSpacing: 1.2 }}>
+              {cols[0]}
+            </Txt>
+          </View>
+        ) : null}
         {split ? (
           <>
             <Head w={W.side} center>
@@ -142,7 +138,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
           </Head>
         )}
         <View style={{ width: W.check, alignItems: 'center' }}>
-          <Ionicons name="checkmark" size={14} color={c.textFaint} />
+          <Ionicons name="checkmark" size={16} color={c.textDim} />
         </View>
       </View>
 
@@ -159,10 +155,10 @@ export const ExerciseBlock = memo(function ExerciseBlock({
         tapHaptic
         scaleTo={0.98}
         onPress={() => addSet(we.id)}
-        style={{ marginHorizontal: 14, marginTop: 10, height: 38, borderRadius: 10, backgroundColor: c.surface2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+        style={{ marginHorizontal: 16, marginTop: 10, height: 46, borderRadius: 12, backgroundColor: c.surface2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
       >
-        <Ionicons name="add" size={16} color={c.textDim} />
-        <Text style={{ fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1.4, color: c.textDim }}>ADD SET</Text>
+        <Ionicons name="add" size={20} color={c.text} />
+        <Text style={{ fontFamily: fonts.semibold, fontSize: 16, color: c.text }}>Add Set</Text>
       </Press>
     </View>
   );
@@ -170,22 +166,18 @@ export const ExerciseBlock = memo(function ExerciseBlock({
 
 function Head({ children, w, flex, center }: { children: string; w?: number; flex?: boolean; center?: boolean }) {
   return (
-    <Txt variant="label" style={{ width: w, flex: flex ? 1 : undefined, textAlign: center ? 'center' : 'left', fontSize: 9.5, letterSpacing: 1.2 }}>
+    <Txt variant="label" style={{ width: w, flex: flex ? 1 : undefined, textAlign: center ? 'center' : 'left', fontSize: 10, letterSpacing: 1.2 }}>
       {children}
     </Txt>
   );
 }
 
-function Pill({ icon, label, onPress, active }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void; active?: boolean }) {
+function Chip({ icon, label, onPress, active }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void; active?: boolean }) {
   const { c, accent } = useTheme();
   return (
-    <Press
-      tapHaptic
-      onPress={onPress}
-      style={{ height: 30, paddingHorizontal: 11, borderRadius: 9, backgroundColor: active ? alpha(accent, 0.12) : c.surface2, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-    >
-      <Ionicons name={icon} size={13} color={active ? accent : c.textDim} />
-      <Text style={{ fontFamily: fonts.medium, fontSize: 12.5, color: active ? c.text : c.textDim }}>{label}</Text>
+    <Press tapHaptic onPress={onPress} style={{ height: 40, paddingHorizontal: 14, borderRadius: 12, backgroundColor: c.surface2, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <Ionicons name={icon} size={17} color={active ? accent : c.textDim} />
+      <Text style={{ fontFamily: fonts.medium, fontSize: 15, color: active ? c.text : c.textDim }}>{label}</Text>
     </Press>
   );
 }
@@ -193,10 +185,11 @@ function Pill({ icon, label, onPress, active }: { icon: React.ComponentProps<typ
 function prevText(p: SetEntry | null, ex: ExerciseDef): string {
   if (!p) return '—';
   if (ex.type === 'time') return `${p.time ?? 0}s`;
-  if (ex.type === 'cardio') return `${p.time ?? 0}′ · ${fmtKg(p.dist ?? 0)}km`;
-  if (ex.type === 'bw_reps') return p.weight ? `+${fmtKg(p.weight)} × ${fmtReps(p)}` : `BW × ${fmtReps(p)}`;
-  if (ex.type === 'assisted') return `−${fmtKg(p.weight)} × ${fmtReps(p)}`;
-  return `${fmtKg(p.weight)} × ${fmtReps(p)}`;
+  if (ex.type === 'cardio') return `${p.time ?? 0}min · ${fmtKg(p.dist ?? 0)}km`;
+  if (ex.type === 'bw_reps') return p.weight ? `+${fmtKg(p.weight)}kg x ${fmtReps(p)}` : `${fmtReps(p)} reps`;
+  if (ex.type === 'assisted') return `-${fmtKg(p.weight)}kg x ${fmtReps(p)}`;
+  if (p.weight === null || p.weight === undefined) return `${fmtReps(p)} reps`;
+  return `${fmtKg(p.weight)}kg x ${fmtReps(p)}`;
 }
 
 const SetRow = memo(function SetRow({ weId, s, label, prev, ex, split }: { weId: string; s: SetEntry; label: string; prev: SetEntry | null; ex: ExerciseDef; split: boolean }) {
@@ -219,75 +212,60 @@ const SetRow = memo(function SetRow({ weId, s, label, prev, ex, split }: { weId:
   const usePrev = () => {
     if (!prev || s.done) return;
     haptic.tap();
-    updateSet(weId, s.id, {
-      weight: prev.weight,
-      reps: prev.reps,
-      reps_r: split ? (prev.reps_r ?? prev.reps) : null,
-      time: prev.time ?? null,
-      dist: prev.dist ?? null,
-    });
+    updateSet(weId, s.id, { weight: prev.weight, reps: prev.reps, reps_r: split ? (prev.reps_r ?? prev.reps) : null, time: prev.time ?? null, dist: prev.dist ?? null });
   };
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 4, gap: W.gap, backgroundColor: s.done ? alpha(accent, 0.08) : 'transparent' }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 5, gap: W.gap, backgroundColor: s.done ? alpha(accent, 0.12) : 'transparent' }}>
       <Press
         onPress={setMenu}
         scaleTo={0.9}
-        hitSlop={4}
-        style={{
-          width: W.set,
-          height: 32,
-          borderRadius: 9,
-          backgroundColor: isPR ? alpha('#F5C542', 0.18) : c.surface2,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+        style={{ width: W.set, height: 40, borderRadius: 10, backgroundColor: isPR ? alpha('#F5C542', 0.18) : s.done ? alpha(accent, 0.18) : c.surface2, alignItems: 'center', justifyContent: 'center' }}
       >
-        {isPR ? <Ionicons name="trophy" size={14} color="#F5C542" /> : <Text style={{ fontFamily: fonts.display, fontSize: 17, color: typeColor, marginTop: 2 }}>{label}</Text>}
+        {isPR ? <Ionicons name="trophy" size={17} color="#F5C542" /> : <Text style={{ fontFamily: fonts.semibold, fontSize: 17, color: typeColor }}>{label}</Text>}
       </Press>
-      <Press style={{ flex: 1, height: 36, justifyContent: 'center' }} onPress={usePrev} scaleTo={0.97}>
-        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontFamily: fonts.mono, fontSize: 12, color: c.textFaint }}>
+      <Press style={{ flex: 1, height: 40, justifyContent: 'center' }} onPress={usePrev} scaleTo={0.97}>
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontFamily: fonts.body, fontSize: 15.5, color: c.textFaint }}>
           {prevText(prev, ex)}
         </Text>
       </Press>
-      {!single ? <NumField value={s[field1] as number | null} auto={!!s.auto} done={s.done} decimal width={W.kg} onChange={(v) => updateSet(weId, s.id, { [field1]: v })} /> : null}
+      {!single ? <NumField value={s[field1] as number | null} auto={!!s.auto} done={s.done} decimal width={split ? W.kgSplit : W.kg} onChange={(v) => updateSet(weId, s.id, { [field1]: v })} /> : null}
       {split ? (
         <>
           <NumField value={s.reps} auto={!!s.auto} done={s.done} width={W.side} onChange={(v) => updateSet(weId, s.id, { reps: v })} />
           <NumField value={s.reps_r ?? null} auto={!!s.auto} done={s.done} width={W.side} onChange={(v) => updateSet(weId, s.id, { reps_r: v })} />
         </>
       ) : (
-        <NumField
-          value={s[field2] as number | null}
-          auto={!!s.auto}
-          done={s.done}
-          decimal={ex.type === 'cardio'}
-          width={W.reps}
-          onChange={(v) => updateSet(weId, s.id, { [field2]: v })}
-        />
+        <NumField value={s[field2] as number | null} auto={!!s.auto} done={s.done} decimal={ex.type === 'cardio'} width={W.reps} onChange={(v) => updateSet(weId, s.id, { [field2]: v })} />
       )}
-      <View style={{ width: W.check, alignItems: 'center' }}>
-        <Checkbox checked={s.done} onToggle={() => toggleSet(weId, s.id)} size={30} />
-      </View>
+      <SetCheck done={s.done} onPress={() => toggleSet(weId, s.id)} />
     </View>
   );
 });
 
-function NumField({
-  value,
-  onChange,
-  auto,
-  done,
-  decimal,
-  width,
-}: {
-  value: number | null;
-  onChange: (v: number | null) => void;
-  auto: boolean;
-  done: boolean;
-  decimal?: boolean;
-  width: number;
-}) {
+/** Square check like Hevy: grey until done, then the accent with a pop. */
+function SetCheck({ done, onPress }: { done: boolean; onPress: () => void }) {
+  const { c, accent, onAccent } = useTheme();
+  const scale = useSharedValue(1);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    scale.value = done ? withSequence(withTiming(0.78, { duration: 80 }), withSpring(1, { damping: 7, stiffness: 380 })) : withSequence(withTiming(0.9, { duration: 70 }), withSpring(1));
+  }, [done, scale]);
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return (
+    <Press onPress={onPress} scaleTo={1} hitSlop={6}>
+      <Animated.View style={[{ width: W.check, height: 40, borderRadius: 10, backgroundColor: done ? accent : c.surface2, alignItems: 'center', justifyContent: 'center' }, st]}>
+        <Ionicons name="checkmark-sharp" size={22} color={done ? onAccent : c.textFaint} />
+      </Animated.View>
+    </Press>
+  );
+}
+
+function NumField({ value, onChange, auto, done, decimal, width }: { value: number | null; onChange: (v: number | null) => void; auto: boolean; done: boolean; decimal?: boolean; width: number }) {
   const { c, accent, isDark } = useTheme();
   const [text, setText] = useState(value === null || value === undefined ? '' : fmtKg(value));
   const focused = useRef(false);
@@ -319,12 +297,14 @@ function NumField({
       placeholderTextColor={c.textFaint}
       style={{
         width,
-        height: 36,
+        height: 40,
         borderRadius: 10,
-        backgroundColor: done ? 'transparent' : c.surface2,
+        borderWidth: done ? 0 : 1,
+        borderColor: c.borderStrong,
+        backgroundColor: 'transparent',
         textAlign: 'center',
-        fontFamily: fonts.semibold,
-        fontSize: 16,
+        fontFamily: done ? fonts.semibold : fonts.medium,
+        fontSize: 17,
         color: auto && !done ? c.textDim : c.text,
         paddingVertical: 0,
       }}

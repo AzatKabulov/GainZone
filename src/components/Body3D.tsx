@@ -146,6 +146,10 @@ export interface Body3DProps {
   autoRotate?: boolean;
   /** called with true when a drag starts and false when it ends (to lock a parent ScrollView) */
   onInteract?: (active: boolean) => void;
+  /** show front and back side by side (static) */
+  dual?: boolean;
+  /** disable touch (rotate / zoom / select) */
+  interactive?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -167,6 +171,8 @@ export function Body3D({
   focus = 'full',
   autoRotate = false,
   onInteract,
+  dual = false,
+  interactive = true,
   style,
 }: Body3DProps) {
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -325,7 +331,7 @@ export function Body3D({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(props.current.background);
-    const camera = new THREE.PerspectiveCamera(28, w / h, 0.05, 20);
+    const camera = new THREE.PerspectiveCamera(28, dual ? w / 2 / h : w / h, 0.05, 20);
 
     scene.add(new THREE.HemisphereLight('#f2eee6', '#141416', 1.0));
     const key = new THREE.DirectionalLight('#ffffff', 2.4);
@@ -373,7 +379,7 @@ export function Body3D({
 
     const loop = () => {
       s.raf = requestAnimationFrame(loop);
-      if (s.spin) {
+      if (s.spin && !dual) {
         s.rotY += 0.004;
         s.dirty = true;
       } else if (!Number.isNaN(s.targetY)) {
@@ -393,11 +399,22 @@ export function Body3D({
       }
       if (!s.dirty) return;
       s.dirty = false;
-      mesh.rotation.y = s.rotY;
-      disc.position.x = mesh.position.x = s.shift * 0.5 * (s.dist / 3.85);
       camera.position.set(0, s.camY + 0.03, s.dist);
       camera.lookAt(0, s.camY, 0);
-      renderer.render(scene, camera);
+      if (dual) {
+        // front and back, side by side
+        renderer.setScissorTest(true);
+        for (const [k, ang] of [[0, 0], [1, Math.PI]] as const) {
+          mesh.rotation.y = ang;
+          renderer.setViewport((k * w) / 2, 0, w / 2, h);
+          renderer.setScissor((k * w) / 2, 0, w / 2, h);
+          renderer.render(scene, camera);
+        }
+      } else {
+        mesh.rotation.y = s.rotY;
+        disc.position.x = mesh.position.x = s.shift * 0.5 * (s.dist / 3.85);
+        renderer.render(scene, camera);
+      }
       gl.endFrameEXP();
     };
     loop();
@@ -410,7 +427,7 @@ export function Body3D({
   };
 
   return (
-    <View style={style} onLayout={onLayout} {...pan.panHandlers}>
+    <View style={style} onLayout={onLayout} {...(interactive ? pan.panHandlers : {})} pointerEvents={interactive ? 'auto' : 'none'}>
       {size.w > 0 ? <GLView key={`${size.w}x${size.h}`} style={{ flex: 1 }} onContextCreate={onContextCreate} msaaSamples={4} /> : null}
     </View>
   );

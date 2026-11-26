@@ -1,21 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { InputAccessoryView, Keyboard, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Body3D } from '@/components/Body3D';
 import { ExerciseBlock, KB_ACCESSORY } from '@/components/ExerciseBlock';
+import { mix, useBodyPalette } from '@/components/kit';
 import { NoteSheet } from '@/components/NoteSheet';
+import { RestSheet } from '@/components/RestSheet';
 import { RestDock } from '@/components/RestTimer';
+import { MUSCLE_IDS, type MuscleId } from '@/data/muscles';
+import { exName, getExercise } from '@/lib/exercise';
 import { Button, Empty, Press, Txt } from '@/components/ui';
 import { haptic } from '@/lib/haptics';
 import { confirm } from '@/lib/menu';
 import { setPickHandler } from '@/lib/pick';
-import { ensureNotificationPermission } from '@/lib/rest';
-import { fmtElapsed, fmtVolume, workoutTotals } from '@/lib/stats';
+import { ensureNotificationPermission, startRest } from '@/lib/rest';
+import { addExerciseToMuscles, emptyMuscleStats, fmtElapsed, fmtVolume, workoutTotals } from '@/lib/stats';
 import { useNow } from '@/lib/useNow';
-import { addExercises, discardWorkout, finishCheck, finishWorkout, renameWorkout } from '@/lib/workout';
+import { addExercises, discardWorkout, finishCheck, finishWorkout, renameWorkout, setExerciseRest } from '@/lib/workout';
 import { useActive } from '@/store/active';
 import { useFx } from '@/store/fx';
 import { fonts, useTheme } from '@/theme';
@@ -29,6 +34,21 @@ export default function WorkoutScreen() {
   const now = useNow(1000);
   const [editingName, setEditingName] = useState(false);
   const [noteFor, setNoteFor] = useState<string | null>(null);
+  const [restFor, setRestFor] = useState<string | null>(null);
+  const [timerOpen, setTimerOpen] = useState(false);
+  const palette = useBodyPalette();
+  // muscles worked so far (only changes when a set is ticked) → stable key for the mini figure
+  const st = emptyMuscleStats();
+  for (const we of w?.exercises ?? []) addExerciseToMuscles(st, we, '');
+  const workedKey = MUSCLE_IDS.map((m) => (st[m].sets >= 1 ? 2 : st[m].sets > 0 ? 1 : 0)).join('');
+  const worked = useMemo(() => {
+    const out: Partial<Record<MuscleId, string>> = {};
+    MUSCLE_IDS.forEach((m, i) => {
+      if (workedKey[i] === '2') out[m] = accent;
+      else if (workedKey[i] === '1') out[m] = mix(palette.idle, accent, 0.5);
+    });
+    return out;
+  }, [workedKey, accent, palette.idle]);
 
   useEffect(() => {
     void ensureNotificationPermission();
@@ -81,38 +101,42 @@ export default function WorkoutScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       {/* top bar */}
-      <View style={{ paddingTop: insets.top + 6, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: c.border, backgroundColor: c.bg }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Press tapHaptic scaleTo={0.9} onPress={back} hitSlop={8} style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ paddingTop: insets.top + 6, backgroundColor: c.bg, borderBottomWidth: 1, borderBottomColor: c.border }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16 }}>
+          <Press tapHaptic scaleTo={0.9} onPress={back} hitSlop={8} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
             <Ionicons name="chevron-down" size={22} color={c.text} />
           </Press>
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={{ fontFamily: fonts.display, fontSize: 26, lineHeight: 28, color: c.text, letterSpacing: 0.8 }}>{fmtElapsed(elapsed)}</Text>
-          </View>
-          <Button label="FINISH" small onPress={finish} style={{ paddingHorizontal: 18 }} />
-        </View>
-        {editingName ? (
-          <TextInput
-            autoFocus
-            value={w.name}
-            onChangeText={renameWorkout}
-            onBlur={() => setEditingName(false)}
-            onSubmitEditing={() => setEditingName(false)}
-            selectionColor={accent}
-            keyboardAppearance={isDark ? 'dark' : 'light'}
-            style={{ fontFamily: fonts.display, fontSize: 32, color: c.text, padding: 0, marginTop: 12 }}
-          />
-        ) : (
-          <Press onPress={() => setEditingName(true)} scaleTo={0.99} style={{ marginTop: 12 }}>
-            <Txt variant="h1" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>
-              {w.name.toUpperCase()}
-              <Text style={{ color: accent }}>.</Text>
-            </Txt>
+          {editingName ? (
+            <TextInput
+              autoFocus
+              value={w.name}
+              onChangeText={renameWorkout}
+              onBlur={() => setEditingName(false)}
+              onSubmitEditing={() => setEditingName(false)}
+              selectionColor={accent}
+              keyboardAppearance={isDark ? 'dark' : 'light'}
+              style={{ flex: 1, fontFamily: fonts.display, fontSize: 24, color: c.text, padding: 0 }}
+            />
+          ) : (
+            <Press onPress={() => setEditingName(true)} scaleTo={0.98} style={{ flex: 1 }}>
+              <Txt variant="h2" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                {w.name.toUpperCase()}
+              </Txt>
+            </Press>
+          )}
+          <Press tapHaptic scaleTo={0.9} onPress={() => setTimerOpen(true)} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="alarm-outline" size={22} color={c.text} />
           </Press>
-        )}
-        <Txt variant="mono" color={c.textDim} style={{ marginTop: 2 }}>
-          {fmtVolume(totals.volume)} KG · {totals.sets} SETS{totals.prs ? ` · ${totals.prs} PR` : ''}
-        </Txt>
+          <Button label="FINISH" small onPress={finish} style={{ paddingHorizontal: 18, height: 44 }} />
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 }}>
+          <Metric label="DURATION" value={fmtElapsed(elapsed)} color={accent} />
+          <Metric label="VOLUME" value={`${fmtVolume(totals.volume)} kg`} />
+          <Metric label="SETS" value={String(totals.sets)} />
+          <View style={{ width: 84, height: 70 }}>
+            <Body3D colors={worked} palette={palette} background={c.bg} dual interactive={false} style={{ flex: 1 }} />
+          </View>
+        </View>
       </View>
 
       <ScrollView
@@ -124,11 +148,11 @@ export default function WorkoutScreen() {
         {w.exercises.length === 0 ? <Empty icon="add-circle-outline" title="EMPTY WORKOUT" /> : null}
         {w.exercises.map((we, i) => (
           <Animated.View key={we.id} entering={FadeInDown.delay(Math.min(i, 6) * 50).duration(360)} layout={LinearTransition.springify().damping(18)}>
-            <ExerciseBlock we={we} workoutId={w.id} templateId={w.template_id} index={i} count={w.exercises.length} onNote={setNoteFor} />
+            <ExerciseBlock we={we} workoutId={w.id} templateId={w.template_id} index={i} count={w.exercises.length} onNote={setNoteFor} onRest={setRestFor} />
           </Animated.View>
         ))}
 
-        <View style={{ paddingHorizontal: 12, marginTop: 16, gap: 10 }}>
+        <View style={{ paddingHorizontal: 16, marginTop: 22, gap: 10 }}>
           <Button label="ADD EXERCISE" icon="add" onPress={add} />
           <Press tapHaptic onPress={discard} style={{ alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 }}>
             <Txt variant="label" color={c.danger}>
@@ -140,6 +164,29 @@ export default function WorkoutScreen() {
 
       <RestDock />
       <NoteSheet weId={noteFor} onClose={() => setNoteFor(null)} />
+      <RestSheet
+        visible={!!restFor}
+        title="REST TIMER"
+        subtitle={restFor ? exName(getExercise(w.exercises.find((e) => e.id === restFor)?.exercise_id ?? '')) : undefined}
+        value={w.exercises.find((e) => e.id === restFor)?.rest ?? 120}
+        onDone={(v) => {
+          if (restFor) setExerciseRest(restFor, v);
+          setRestFor(null);
+        }}
+        onClose={() => setRestFor(null)}
+      />
+      <RestSheet
+        visible={timerOpen}
+        title="TIMER"
+        subtitle="Start a rest countdown"
+        value={90}
+        action="START"
+        onDone={(v) => {
+          if (v) startRest(v, '', 'Timer');
+          setTimerOpen(false);
+        }}
+        onClose={() => setTimerOpen(false)}
+      />
 
       {Platform.OS === 'ios' ? (
         <InputAccessoryView nativeID={KB_ACCESSORY} backgroundColor={isDark ? '#1A1A1D' : '#EAE6DD'}>
@@ -150,6 +197,20 @@ export default function WorkoutScreen() {
           </View>
         </InputAccessoryView>
       ) : null}
+    </View>
+  );
+}
+
+function Metric({ label, value, color }: { label: string; value: string; color?: string }) {
+  const { c } = useTheme();
+  return (
+    <View style={{ flex: 1 }}>
+      <Txt variant="label" style={{ fontSize: 10 }}>
+        {label}
+      </Txt>
+      <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: fonts.semibold, fontSize: 19, color: color ?? c.text, marginTop: 4 }}>
+        {value}
+      </Text>
     </View>
   );
 }
