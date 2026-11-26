@@ -5,6 +5,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Body3D } from '@/components/Body3D';
+import { DurationSheet } from '@/components/DurationSheet';
 import { FxHost } from '@/components/FxHost';
 import { FieldLabel, heatColors, SheetHeader, Stat, useBodyPalette } from '@/components/kit';
 import { Button, Card, Empty, Input, Press, Section, Txt } from '@/components/ui';
@@ -14,7 +15,7 @@ import { getExercise, useExName } from '@/lib/exercise';
 import { haptic } from '@/lib/haptics';
 import { confirm } from '@/lib/menu';
 import { addExerciseToMuscles, emptyMuscleStats, FEELINGS, fmtDur, fmtSetValue, fmtVolume } from '@/lib/stats';
-import { startWorkoutFrom, templateFromExercises } from '@/lib/workout';
+import { setSavedDuration, startWorkoutFrom, templateFromExercises } from '@/lib/workout';
 import { useActive } from '@/store/active';
 import { useData } from '@/store/data';
 import { useFx } from '@/store/fx';
@@ -25,6 +26,7 @@ export default function SessionScreen() {
   const { c, accent, isDark } = useTheme();
   const palette = useBodyPalette();
   const [scrollOn, setScrollOn] = useState(true);
+  const [durOpen, setDurOpen] = useState(false);
   const insets = useSafeAreaInsets();
   const w = useData((s) => s.workouts[id]);
   const exName = useExName();
@@ -125,7 +127,7 @@ export default function SessionScreen() {
 
         <Card>
           <View style={{ flexDirection: 'row' }}>
-            <Stat label="TIME" value={fmtDur(w.duration_sec)} />
+            <Stat label="TIME" value={fmtDur(w.duration_sec)} onPress={() => setDurOpen(true)} />
             <Stat label="VOLUME" value={fmtVolume(w.volume)} unit="KG" />
             <Stat label="SETS" value={String(w.sets_count)} />
           </View>
@@ -196,6 +198,15 @@ export default function SessionScreen() {
         <Button label="SAVE AS ROUTINE" icon="bookmark-outline" variant="outline" onPress={saveAsRoutine} style={{ marginTop: 10 }} />
         <Button label="DELETE WORKOUT" icon="trash-outline" variant="danger" small onPress={del} style={{ marginTop: 18 }} />
       </ScrollView>
+      <DurationSheet
+        visible={durOpen}
+        seconds={w.duration_sec}
+        onDone={(sec) => {
+          setSavedDuration(w.id, sec);
+          setDurOpen(false);
+        }}
+        onClose={() => setDurOpen(false)}
+      />
       <FxHost inSheet />
     </View>
   );

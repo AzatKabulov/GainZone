@@ -133,6 +133,24 @@ const mapEx = (weId: string, fn: (we: WorkoutExercise) => WorkoutExercise) =>
   patchWorkout((w) => ({ ...w, exercises: w.exercises.map((we) => (we.id === weId ? fn(we) : we)) }));
 
 export const renameWorkout = (name: string) => patchWorkout((w) => ({ ...w, name }));
+
+/** Set how long the live workout has been going (moves its start time). */
+export function setLiveDuration(seconds: number) {
+  patchWorkout((w) => ({ ...w, started_at: new Date(Date.now() - Math.max(0, seconds) * 1000).toISOString() }));
+  haptic.light();
+}
+
+/** Fix the length of a saved workout (keeps its start, moves its end). */
+export function setSavedDuration(workoutId: string, seconds: number) {
+  const w = useData.getState().workouts[workoutId];
+  if (!w) return;
+  const sec = Math.max(60, seconds);
+  useData.getState().patch('workouts', workoutId, {
+    duration_sec: sec,
+    ended_at: new Date(Date.parse(w.started_at) + sec * 1000).toISOString(),
+  });
+  haptic.light();
+}
 export const setWorkoutNote = (note: string) => patchWorkout((w) => ({ ...w, note }));
 
 export function addExercises(ids: string[]) {

@@ -6,6 +6,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Body3D } from '@/components/Body3D';
+import { DurationSheet } from '@/components/DurationSheet';
 import { Delta } from '@/components/charts';
 import { FxHost } from '@/components/FxHost';
 import { FieldLabel, heatColors, Stat, useBodyPalette } from '@/components/kit';
@@ -25,7 +26,7 @@ import {
   fmtVolume,
   workoutTotals,
 } from '@/lib/stats';
-import { routineChanged, updateTemplateFromWorkout } from '@/lib/workout';
+import { routineChanged, setSavedDuration, updateTemplateFromWorkout } from '@/lib/workout';
 import { useData } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { alpha, fonts, useTheme } from '@/theme';
@@ -43,6 +44,7 @@ export default function FinishScreen() {
   const { c, accent, isDark } = useTheme();
   const palette = useBodyPalette();
   const [scrollOn, setScrollOn] = useState(true);
+  const [durOpen, setDurOpen] = useState(false);
   const insets = useSafeAreaInsets();
   const w = useData((s) => s.workouts[id]);
   const all = useData((s) => s.workouts);
@@ -112,7 +114,7 @@ export default function FinishScreen() {
         <Animated.View entering={FadeInDown.delay(80).duration(450)}>
           <Card style={{ marginTop: 18 }}>
             <View style={{ flexDirection: 'row' }}>
-              <Stat label="TIME" value={fmtDur(w.duration_sec)} />
+              <Stat label="TIME" value={fmtDur(w.duration_sec)} onPress={() => setDurOpen(true)} />
               <Stat label="VOLUME" value={fmtVolume(data.totals.volume)} unit="KG" />
             </View>
             <View style={{ height: 1, backgroundColor: c.border, marginVertical: 14 }} />
@@ -249,6 +251,15 @@ export default function FinishScreen() {
 
         <Button label="SAVE WORKOUT" icon="checkmark" onPress={save} style={{ marginTop: 26 }} />
       </ScrollView>
+      <DurationSheet
+        visible={durOpen}
+        seconds={w.duration_sec}
+        onDone={(sec) => {
+          setSavedDuration(w.id, sec);
+          setDurOpen(false);
+        }}
+        onClose={() => setDurOpen(false)}
+      />
       <FxHost />
     </View>
   );

@@ -6,6 +6,7 @@ import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Body3D } from '@/components/Body3D';
+import { DurationSheet } from '@/components/DurationSheet';
 import { ExerciseBlock, KB_ACCESSORY } from '@/components/ExerciseBlock';
 import { mix, useBodyPalette } from '@/components/kit';
 import { NoteSheet } from '@/components/NoteSheet';
@@ -20,7 +21,7 @@ import { setPickHandler } from '@/lib/pick';
 import { ensureNotificationPermission, startRest } from '@/lib/rest';
 import { addExerciseToMuscles, emptyMuscleStats, fmtElapsed, fmtVolume, workoutTotals } from '@/lib/stats';
 import { useNow } from '@/lib/useNow';
-import { addExercises, discardWorkout, finishCheck, finishWorkout, renameWorkout, setExerciseRest } from '@/lib/workout';
+import { addExercises, discardWorkout, finishCheck, finishWorkout, renameWorkout, setExerciseRest, setLiveDuration } from '@/lib/workout';
 import { useActive } from '@/store/active';
 import { useFx } from '@/store/fx';
 import { fonts, useTheme } from '@/theme';
@@ -36,6 +37,7 @@ export default function WorkoutScreen() {
   const [noteFor, setNoteFor] = useState<string | null>(null);
   const [restFor, setRestFor] = useState<string | null>(null);
   const [timerOpen, setTimerOpen] = useState(false);
+  const [durOpen, setDurOpen] = useState(false);
   const palette = useBodyPalette();
   // muscles worked so far (only changes when a set is ticked) → stable key for the mini figure
   const st = emptyMuscleStats();
@@ -130,7 +132,7 @@ export default function WorkoutScreen() {
           <Button label="FINISH" small onPress={finish} style={{ paddingHorizontal: 18, height: 44 }} />
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 }}>
-          <Metric label="DURATION" value={fmtElapsed(elapsed)} color={accent} />
+          <Metric label="DURATION" value={fmtElapsed(elapsed)} color={accent} onPress={() => setDurOpen(true)} />
           <Metric label="VOLUME" value={`${fmtVolume(totals.volume)} kg`} />
           <Metric label="SETS" value={String(totals.sets)} />
           <View style={{ width: 84, height: 70 }}>
@@ -175,6 +177,16 @@ export default function WorkoutScreen() {
         }}
         onClose={() => setRestFor(null)}
       />
+      <DurationSheet
+        visible={durOpen}
+        seconds={elapsed}
+        startedAt="live"
+        onDone={(sec) => {
+          setLiveDuration(sec);
+          setDurOpen(false);
+        }}
+        onClose={() => setDurOpen(false)}
+      />
       <RestSheet
         visible={timerOpen}
         title="TIMER"
@@ -201,16 +213,26 @@ export default function WorkoutScreen() {
   );
 }
 
-function Metric({ label, value, color }: { label: string; value: string; color?: string }) {
+function Metric({ label, value, color, onPress }: { label: string; value: string; color?: string; onPress?: () => void }) {
   const { c } = useTheme();
-  return (
-    <View style={{ flex: 1 }}>
-      <Txt variant="label" style={{ fontSize: 10 }}>
-        {label}
-      </Txt>
+  const body = (
+    <>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Txt variant="label" style={{ fontSize: 10 }}>
+          {label}
+        </Txt>
+        {onPress ? <Ionicons name="pencil" size={10} color={c.textFaint} /> : null}
+      </View>
       <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: fonts.semibold, fontSize: 19, color: color ?? c.text, marginTop: 4 }}>
         {value}
       </Text>
-    </View>
+    </>
+  );
+  return onPress ? (
+    <Press tapHaptic scaleTo={0.96} onPress={onPress} style={{ flex: 1 }} hitSlop={8}>
+      {body}
+    </Press>
+  ) : (
+    <View style={{ flex: 1 }}>{body}</View>
   );
 }

@@ -66,17 +66,42 @@ export function FieldLabel({ children, style }: { children: string; style?: Styl
   );
 }
 
-/** Big number + label, for stat rows. */
-export function Stat({ label, value, unit, align = 'left', color }: { label: string; value: string; unit?: string; align?: 'left' | 'center'; color?: string }) {
+/** Big number + label, for stat rows. With onPress it shows a small pencil and is tappable. */
+export function Stat({
+  label,
+  value,
+  unit,
+  align = 'left',
+  color,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  align?: 'left' | 'center';
+  color?: string;
+  onPress?: () => void;
+}) {
   const { c } = useTheme();
-  return (
-    <View style={{ flex: 1, alignItems: align === 'center' ? 'center' : 'flex-start' }}>
-      <Txt variant="label">{label}</Txt>
+  const body = (
+    <>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Txt variant="label">{label}</Txt>
+        {onPress ? <Ionicons name="pencil" size={10} color={c.textFaint} /> : null}
+      </View>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3, marginTop: 4 }}>
         <Text style={{ fontFamily: fonts.display, fontSize: 30, lineHeight: 32, letterSpacing: 0.6, color: color ?? c.text }}>{value}</Text>
         {unit ? <Text style={{ fontFamily: fonts.mono, fontSize: 10.5, letterSpacing: 1.2, color: c.textDim }}>{unit}</Text> : null}
       </View>
-    </View>
+    </>
+  );
+  const style = { flex: 1, alignItems: align === 'center' ? ('center' as const) : ('flex-start' as const) };
+  return onPress ? (
+    <Press tapHaptic scaleTo={0.96} hitSlop={8} onPress={onPress} style={style}>
+      {body}
+    </Press>
+  ) : (
+    <View style={style}>{body}</View>
   );
 }
 
