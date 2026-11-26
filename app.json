@@ -15,7 +15,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.gainzone.app",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     },
     "android": {
@@ -56,6 +58,15 @@
     ],
     "experiments": {
       "typedRoutes": false
+    },
+    "owner": "azatkabulov",
+    "extra": {
+      "eas": {
+        "projectId": "10b59227-b7c4-433a-a8a9-95a95e3cc525"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/10b59227-b7c4-433a-a8a9-95a95e3cc525"
     }
   }
 }

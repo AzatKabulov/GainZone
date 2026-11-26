@@ -60,7 +60,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "publish": "eas update --branch main --platform ios --message \"GainZone\""
+    "publish": "eas update --branch main --platform ios --environment production --message \"GainZone\""
   },
   "private": true
 }

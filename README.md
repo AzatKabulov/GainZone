@@ -36,7 +36,18 @@ GainZone shares the *ZONE Supabase project with GrindZone (one account for both 
 
 Schema, RLS and triggers: [`supabase/migrations/20261126150000_gainzone_core_schema.sql`](supabase/migrations/20261126150000_gainzone_core_schema.sql) — run it once in the Supabase SQL editor (it is idempotent). Until it is applied the app keeps everything on the phone and uploads it automatically afterwards.
 
-## Run
+## Open it on your iPhone
+
+1. Install **Expo Go** (SDK 58) and sign in with the Expo account that owns the project (`azatkabulov`) — since May 2026 Expo Go only loads EAS updates for the project owner / organization members.
+2. Scan with the iPhone camera → **Open in Expo Go**:
+
+<p align="center"><img src="docs/expo-go-qr.png" width="220" alt="Expo Go QR code for GainZone" /></p>
+
+Or open on the phone: `exp://u.expo.dev/10b59227-b7c4-433a-a8a9-95a95e3cc525?channel-name=main&runtime-version=exposdk:58.0.0`
+
+It always loads the latest published version (EAS Update, channel `main`).
+
+## Run locally
 
 ```bash
 npm install
@@ -46,7 +57,7 @@ npx expo start            # scan the QR code with the iPhone camera → Expo Go
 Publish an over-the-air update (Expo Go, channel `main`):
 
 ```bash
-npx eas-cli@latest update --branch main --platform ios --message "GainZone"
+npm run publish
 ```
 
 ## Stack
@@ -61,4 +72,4 @@ Demo photos: [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (pu
 
 1. **База (один раз).** Supabase → проект *ZONE (тот же, что у GrindZone) → SQL Editor → вставить содержимое `supabase/migrations/20261126150000_gainzone_core_schema.sql` → Run. Пока это не сделано, всё хранится на телефоне и само загрузится в облако после.
 2. **Вход.** Тот же email и пароль, что и в GrindZone (или «Continue offline»).
-3. **Открыть в Expo Go.** Ссылка/QR опубликованного обновления (канал `main`) или `npx expo start` с компьютера.
+3. **Открыть в Expo Go.** Войти в Expo Go под аккаунтом `azatkabulov`, отсканировать QR выше камерой iPhone или открыть ссылку `exp://u.expo.dev/10b59227-b7c4-433a-a8a9-95a95e3cc525?channel-name=main&runtime-version=exposdk:58.0.0`. Всегда открывается последняя опубликованная версия — компьютер не нужен.
