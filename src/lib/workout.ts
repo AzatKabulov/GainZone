@@ -474,6 +474,42 @@ export function discardWorkout() {
   haptic.warning();
 }
 
+/** A finished, still empty workout on a past day (18:00, 1 h) — filled in on the session page. */
+export function createPastWorkout(day: string): string {
+  const [y, m, d] = day.split('-').map(Number);
+  const start = new Date(y, m - 1, d, 18, 0, 0);
+  const w = useData.getState().create('workouts', {
+    template_id: null,
+    name: 'Workout',
+    started_at: start.toISOString(),
+    ended_at: new Date(start.getTime() + 3600_000).toISOString(),
+    duration_sec: 3600,
+    exercises: [],
+    note: '',
+    feeling: null,
+    energy: null,
+    bodyweight: null,
+    volume: 0,
+    sets_count: 0,
+    prs_count: 0,
+  });
+  return w.id;
+}
+
+/** An exercise with three empty (but already "done") sets, for logging after the fact. */
+export function blankLoggedExercise(exerciseId: string): WorkoutExercise {
+  const ex = getExercise(exerciseId);
+  return {
+    id: uuid(),
+    exercise_id: exerciseId,
+    rest: ex.rest || useSettings.getState().defaultRest,
+    note: '',
+    split: !!ex.uni,
+    superset: null,
+    sets: [0, 1, 2].map(() => ({ ...blankSet('normal'), done: true })),
+  };
+}
+
 /* ─────────────────────────── routines ─────────────────────────── */
 
 export function templateFromExercises(list: WorkoutExercise[]): TemplateExercise[] {

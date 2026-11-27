@@ -7,6 +7,7 @@ import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { GROUP_NAME, type GroupId, type MuscleId, MUSCLES } from '@/data/muscles';
 import { addDays, dateKey, dayNum, diffDays, monthLong, relativeLabel, startOfWeek, todayKey } from '@/lib/date';
 import { getExercise } from '@/lib/exercise';
+import { createPastWorkout } from '@/lib/workout';
 import { haptic } from '@/lib/haptics';
 import { fmtDur, fmtVolume, isWorking, weekStreak, workoutsByDay } from '@/lib/stats';
 import type { Workout } from '@/store/data';
@@ -189,6 +190,13 @@ export function ActivityCalendar({ list, goal }: { list: Workout[]; goal: number
               <Txt variant="small" color={c.textDim} style={{ flex: 1 }}>
                 {day === today ? 'Nothing logged today yet.' : `${relativeLabel(day)} — rest day.`}
               </Txt>
+              {day < today ? (
+                <Press tapHaptic hitSlop={8} onPress={() => router.push(`/session/${createPastWorkout(day)}?log=1`)}>
+                  <Txt variant="label" color={accent}>
+                    + LOG
+                  </Txt>
+                </Press>
+              ) : null}
             </Animated.View>
           )}
         </View>

@@ -15,14 +15,15 @@ import { getExercise, useExName } from '@/lib/exercise';
 import { haptic } from '@/lib/haptics';
 import { confirm } from '@/lib/menu';
 import { addExerciseToMuscles, emptyMuscleStats, FEELINGS, fmtDur, fmtKg, fmtSetValue, fmtVolume, workoutTotals } from '@/lib/stats';
-import { setSavedDuration, startOrAsk, startWorkoutFrom, templateFromExercises } from '@/lib/workout';
+import { blankLoggedExercise, setSavedDuration, startOrAsk, startWorkoutFrom, templateFromExercises } from '@/lib/workout';
+import { setPickHandler } from '@/lib/pick';
 import { useData, uuid, type SetEntry, type WorkoutExercise } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { alpha, fonts, useTheme } from '@/theme';
 import { goBack } from '@/lib/nav';
 
 export default function SessionScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, log } = useLocalSearchParams<{ id: string; log?: string }>();
   const { c, accent, isDark } = useTheme();
   const palette = useBodyPalette();
   const [scrollOn, setScrollOn] = useState(true);
@@ -30,8 +31,9 @@ export default function SessionScreen() {
   const insets = useSafeAreaInsets();
   const w = useData((s) => s.workouts[id]);
   const exName = useExName();
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<WorkoutExercise[] | null>(null);
+  const logging = log === '1';
+  const [editing, setEditing] = useState(logging);
+  const [draft, setDraft] = useState<WorkoutExercise[] | null>(logging ? [] : null);
   const [name, setName] = useState(w?.name ?? '');
   const [note, setNote] = useState(w?.note ?? '');
 
@@ -59,6 +61,18 @@ export default function SessionScreen() {
 
   const d = new Date(w.started_at);
   const feel = FEELINGS.find((f) => f.v === w.feeling);
+
+  // a past workout that never got any exercises is thrown away on close
+  const close = () => {
+    const cur = useData.getState().workouts[w.id];
+    if (cur && !cur.exercises.length) useData.getState().remove('workouts', w.id);
+    goBack();
+  };
+
+  const addLogged = () => {
+    setPickHandler((ids) => setDraft((d) => [...(d ?? []), ...ids.map(blankLoggedExercise)]), { multi: true, title: 'ADD EXERCISES' });
+    router.push('/pick');
+  };
 
   const startEdit = () => {
     setDraft(w.exercises.map((e) => ({ ...e, sets: e.sets.map((x) => ({ ...x })) })));
@@ -101,7 +115,7 @@ export default function SessionScreen() {
       <SheetHeader
         kicker={`${relativeLabel(dateKey(d))} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`}
         title={w.name.toUpperCase()}
-        onClose={() => goBack()}
+        onClose={close}
         right={
           <Press tapHaptic onPress={() => (editing ? saveEdit() : startEdit())} style={{ paddingHorizontal: 10, height: 36, justifyContent: 'center' }}>
             <Txt variant="label" color={accent}>
@@ -174,7 +188,8 @@ export default function SessionScreen() {
                 onRemove={() => setDraft((d) => (d ? d.filter((_, k) => k !== i) : d))}
               />
             ))}
-            <Button label="SAVE CHANGES" icon="checkmark" onPress={saveEdit} style={{ marginTop: 6 }} />
+            <Button label="ADD EXERCISE" icon="add" variant="outline" onPress={addLogged} style={{ marginTop: 6 }} />
+            <Button label="SAVE CHANGES" icon="checkmark" onPress={saveEdit} />
           </View>
         ) : null}
         <View style={{ gap: 10, display: editing ? 'none' : 'flex' }}>

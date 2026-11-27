@@ -61,7 +61,7 @@ export function workoutTotals(exercises: WorkoutExercise[]) {
 
 export function finishedWorkouts(all: Record<string, Workout>): Workout[] {
   return Object.values(all)
-    .filter((w) => !w.deleted && w.ended_at)
+    .filter((w) => !w.deleted && w.ended_at && w.exercises.length > 0)
     .sort((a, b) => (a.started_at < b.started_at ? 1 : -1));
 }
 
