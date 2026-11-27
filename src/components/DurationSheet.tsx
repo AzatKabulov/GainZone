@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+
 import { fonts, useTheme } from '@/theme';
+import { Backdrop, SHEET_IN } from './Backdrop';
 import { Button, Txt } from './ui';
 import { WheelPicker } from './WheelPicker';
 
@@ -25,7 +28,7 @@ export function DurationSheet({
   onClose: () => void;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       {visible ? <Body seconds={seconds} live={startedAt === 'live'} onDone={onDone} onClose={onClose} /> : null}
     </Modal>
   );
@@ -43,8 +46,8 @@ function Body({ seconds, live, onDone, onClose }: { seconds: number; live: boole
 
   return (
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-      <Pressable style={{ flex: 1, backgroundColor: c.scrim }} onPress={onClose} />
-      <View style={{ backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: c.border, paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 16 }}>
+      <Backdrop onPress={onClose} />
+      <Animated.View entering={SHEET_IN} style={{ backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: c.border, paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 16 }}>
         <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: c.borderStrong, marginBottom: 14 }} />
         <View style={{ alignItems: 'center', paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: c.border, marginHorizontal: -20 }}>
           <Txt variant="label" color={accent}>
@@ -65,7 +68,7 @@ function Body({ seconds, live, onDone, onClose }: { seconds: number; live: boole
           <Text style={{ fontFamily: fonts.mono, fontSize: 12, letterSpacing: 1.4, color: c.textDim, width: 34 }}>MIN</Text>
         </View>
         <Button label="DONE" onPress={() => onDone((h * 60 + m) * 60)} style={{ marginTop: 16 }} />
-      </View>
+      </Animated.View>
     </View>
   );
 }

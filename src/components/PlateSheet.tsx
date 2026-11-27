@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { Modal, Text, TextInput, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fmtKg } from '@/lib/stats';
 import { fonts, useTheme } from '@/theme';
+import { Backdrop, SHEET_IN } from './Backdrop';
 import { Chip, Txt } from './ui';
 
 const PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
@@ -26,7 +28,7 @@ export function platesFor(target: number, bar: number): { plates: number[]; rest
 /** Bottom sheet: which plates to load on each side of the bar. */
 export function PlateSheet({ kg, onClose }: { kg: number | null; onClose: () => void }) {
   return (
-    <Modal visible={kg !== null} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={kg !== null} transparent animationType="none" onRequestClose={onClose}>
       {kg !== null ? <Body initial={kg} onClose={onClose} /> : null}
     </Modal>
   );
@@ -42,8 +44,8 @@ function Body({ initial, onClose }: { initial: number; onClose: () => void }) {
 
   return (
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-      <Pressable style={{ flex: 1, backgroundColor: c.scrim }} onPress={onClose} />
-      <View style={{ backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: c.border, paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 20 }}>
+      <Backdrop onPress={onClose} />
+      <Animated.View entering={SHEET_IN} style={{ backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: c.border, paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 20 }}>
         <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: c.borderStrong, marginBottom: 14 }} />
         <Txt variant="label" color={accent}>
           PLATE CALCULATOR
@@ -100,7 +102,7 @@ function Body({ initial, onClose }: { initial: number; onClose: () => void }) {
             {fmtKg(rest)} kg can&apos;t be made with standard plates.
           </Txt>
         ) : null}
-      </View>
+      </Animated.View>
     </View>
   );
 }

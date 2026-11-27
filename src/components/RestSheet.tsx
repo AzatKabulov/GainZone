@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+
 import { useTheme } from '@/theme';
+import { Backdrop, SHEET_IN } from './Backdrop';
 import { Button, Txt } from './ui';
 import { WheelPicker } from './WheelPicker';
 
@@ -34,7 +37,7 @@ export function RestSheet({
   onClose: () => void;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       {visible ? <Body title={title} subtitle={subtitle} value={value} action={action} onDone={onDone} onClose={onClose} /> : null}
     </Modal>
   );
@@ -46,8 +49,8 @@ function Body({ title, subtitle, value, action, onDone, onClose }: { title: stri
   const [v, setV] = useState(REST_VALUES.includes(value) ? value : 120);
   return (
     <KeyboardAvoidingView style={{ flex: 1, justifyContent: 'flex-end' }}>
-      <Pressable style={{ flex: 1, backgroundColor: c.scrim }} onPress={onClose} />
-      <View style={{ backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: c.border, paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 16 }}>
+      <Backdrop onPress={onClose} />
+      <Animated.View entering={SHEET_IN} style={{ backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: c.border, paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 16 }}>
         <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: c.borderStrong, marginBottom: 14 }} />
         <View style={{ alignItems: 'center', paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: c.border, marginHorizontal: -20 }}>
           <Txt variant="label" color={accent}>
@@ -63,7 +66,7 @@ function Body({ title, subtitle, value, action, onDone, onClose }: { title: stri
           <WheelPicker items={REST_VALUES} value={v} onChange={setV} format={fmtRestLong} />
         </View>
         <Button label={action} onPress={() => onDone(v)} style={{ marginTop: 16 }} />
-      </View>
+      </Animated.View>
     </KeyboardAvoidingView>
   );
 }

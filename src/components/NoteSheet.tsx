@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, Switch, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Switch, Text, TextInput, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 
 import { exName, getExercise } from '@/lib/exercise';
 import { exerciseSessions, finishedWorkouts, recentNotes } from '@/lib/stats';
@@ -9,12 +11,13 @@ import { setExerciseNote } from '@/lib/workout';
 import { useActive } from '@/store/active';
 import { useData } from '@/store/data';
 import { fonts, useTheme } from '@/theme';
+import { Backdrop, SHEET_IN } from './Backdrop';
 import { Button, Txt } from './ui';
 
 /** Small bottom sheet for an exercise note: today's note, pin to routine, last 3 notes. */
 export function NoteSheet({ weId, onClose }: { weId: string | null; onClose: () => void }) {
   return (
-    <Modal visible={!!weId} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={!!weId} transparent animationType="none" onRequestClose={onClose}>
       {weId ? <Body weId={weId} onClose={onClose} /> : null}
     </Modal>
   );
@@ -51,8 +54,8 @@ function Body({ weId, onClose }: { weId: string; onClose: () => void }) {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-      <Pressable style={{ flex: 1, backgroundColor: c.scrim }} onPress={save} />
-      <View style={{ backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: c.border, padding: 20, paddingBottom: insets.bottom + 16 }}>
+      <Backdrop onPress={save} />
+      <Animated.View entering={SHEET_IN} style={{ backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: c.border, padding: 20, paddingBottom: insets.bottom + 16 }}>
         <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: c.borderStrong, marginTop: -8, marginBottom: 14 }} />
         <Txt variant="label" color={accent}>
           NOTE
@@ -92,7 +95,7 @@ function Body({ weId, onClose }: { weId: string; onClose: () => void }) {
           </View>
         ) : null}
         <Button label="DONE" small onPress={save} style={{ marginTop: 18 }} />
-      </View>
+      </Animated.View>
     </KeyboardAvoidingView>
   );
 }

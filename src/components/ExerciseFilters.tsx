@@ -2,13 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 
 import type { Equip, ExerciseDef } from '@/data/exerciseTypes';
 import { EQUIP_NAME } from '@/data/exerciseTypes';
 import { MUSCLE_ICONS } from '@/data/muscleIcons';
 import type { MuscleId } from '@/data/muscles';
 import { alpha, fonts, useTheme } from '@/theme';
+import { Backdrop, SHEET_IN } from './Backdrop';
 import { Button, Press, Txt, type IconName } from './ui';
 
 /* ─────────────────────────── filter model ─────────────────────────── */
@@ -125,8 +128,8 @@ function Sheet({
   const insets = useSafeAreaInsets();
   return (
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Pressable style={{ flex: 1, backgroundColor: c.scrim }} onPress={onClose} />
-        <View style={{ maxHeight: '86%', backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: c.border, paddingTop: 12 }}>
+        <Backdrop onPress={onClose} />
+        <Animated.View entering={SHEET_IN} style={{ maxHeight: '86%', backgroundColor: c.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: c.border, paddingTop: 12 }}>
           <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: c.borderStrong, marginBottom: 12 }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: c.border }}>
             <Txt variant="h2" style={{ flex: 1 }}>
@@ -144,7 +147,7 @@ function Sheet({
             <Button label="CLEAR" variant="outline" onPress={onClear} style={{ flex: 1 }} />
             <Button label={`SHOW ${count} RESULT${count === 1 ? '' : 'S'}`} onPress={onShow} style={{ flex: 2 }} />
           </View>
-        </View>
+        </Animated.View>
       </View>
   );
 }
@@ -163,7 +166,7 @@ export function MuscleSheet({
   onClose: () => void;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       {visible ? <MuscleBody value={value} countFor={countFor} onApply={onApply} onClose={onClose} /> : null}
     </Modal>
   );
@@ -236,7 +239,7 @@ export function EquipSheet({
   onClose: () => void;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       {visible ? <EquipBody value={value} countFor={countFor} onApply={onApply} onClose={onClose} /> : null}
     </Modal>
   );

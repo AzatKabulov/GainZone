@@ -1,20 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { Modal, Pressable, ScrollView, View } from 'react-native';
+import { Modal, ScrollView, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getExercise, useExName } from '@/lib/exercise';
 import { startWorkout } from '@/lib/workout';
 import { useData } from '@/store/data';
 import { useTheme } from '@/theme';
+import { Backdrop, SHEET_IN } from './Backdrop';
 import { ExerciseThumb } from './kit';
 import { Button, Press, Txt } from './ui';
 
 /** Bottom sheet behind the tab bar's WORKOUT button: empty workout or one of the routines. */
 export function StartSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       {visible ? <Body onClose={onClose} /> : null}
     </Modal>
   );
@@ -41,8 +43,8 @@ function Body({ onClose }: { onClose: () => void }) {
 
   return (
     <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-      <Pressable style={{ flex: 1, backgroundColor: c.scrim }} onPress={onClose} />
-      <View
+      <Backdrop onPress={onClose} />
+      <Animated.View entering={SHEET_IN}
         style={{
           maxHeight: '78%',
           backgroundColor: c.surface,
@@ -103,7 +105,7 @@ function Body({ onClose }: { onClose: () => void }) {
             style={{ marginTop: 6 }}
           />
         </ScrollView>
-      </View>
+      </Animated.View>
     </View>
   );
 }
