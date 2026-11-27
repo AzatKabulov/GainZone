@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Body3D } from '@/components/Body3D';
@@ -14,9 +14,9 @@ import { dateKey, relativeLabel } from '@/lib/date';
 import { getExercise, useExName } from '@/lib/exercise';
 import { haptic } from '@/lib/haptics';
 import { confirm } from '@/lib/menu';
-import { addExerciseToMuscles, emptyMuscleStats, FEELINGS, fmtDur, fmtSetValue, fmtVolume } from '@/lib/stats';
+import { addExerciseToMuscles, emptyMuscleStats, FEELINGS, fmtDur, fmtKg, fmtSetValue, fmtVolume, workoutTotals } from '@/lib/stats';
 import { setSavedDuration, startOrAsk, startWorkoutFrom, templateFromExercises } from '@/lib/workout';
-import { useData } from '@/store/data';
+import { useData, uuid, type SetEntry, type WorkoutExercise } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { alpha, fonts, useTheme } from '@/theme';
 import { goBack } from '@/lib/nav';
@@ -31,6 +31,7 @@ export default function SessionScreen() {
   const w = useData((s) => s.workouts[id]);
   const exName = useExName();
   const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<WorkoutExercise[] | null>(null);
   const [name, setName] = useState(w?.name ?? '');
   const [note, setNote] = useState(w?.note ?? '');
 
@@ -59,9 +60,23 @@ export default function SessionScreen() {
   const d = new Date(w.started_at);
   const feel = FEELINGS.find((f) => f.v === w.feeling);
 
+  const startEdit = () => {
+    setDraft(w.exercises.map((e) => ({ ...e, sets: e.sets.map((x) => ({ ...x })) })));
+    setEditing(true);
+  };
+
   const saveEdit = () => {
-    useData.getState().patch('workouts', w.id, { name: name.trim() || w.name, note });
+    const patch: Partial<typeof w> = { name: name.trim() || w.name, note };
+    if (draft) {
+      const exercises = draft
+        .map((e) => ({ ...e, sets: e.sets.filter((x) => x.weight || x.reps || x.reps_r || x.time || x.dist) }))
+        .filter((e) => e.sets.length);
+      const t = workoutTotals(exercises);
+      Object.assign(patch, { exercises, volume: t.volume, sets_count: t.sets, prs_count: t.prs });
+    }
+    useData.getState().patch('workouts', w.id, patch);
     setEditing(false);
+    setDraft(null);
     haptic.success();
   };
 
@@ -88,7 +103,7 @@ export default function SessionScreen() {
         title={w.name.toUpperCase()}
         onClose={() => goBack()}
         right={
-          <Press tapHaptic onPress={() => (editing ? saveEdit() : setEditing(true))} style={{ paddingHorizontal: 10, height: 36, justifyContent: 'center' }}>
+          <Press tapHaptic onPress={() => (editing ? saveEdit() : startEdit())} style={{ paddingHorizontal: 10, height: 36, justifyContent: 'center' }}>
             <Txt variant="label" color={accent}>
               {editing ? 'SAVE' : 'EDIT'}
             </Txt>
@@ -149,7 +164,20 @@ export default function SessionScreen() {
         </Card>
 
         <Section label="EXERCISES" count={w.exercises.length} style={{ marginTop: 22, marginBottom: 10 }} />
-        <View style={{ gap: 10 }}>
+        {editing && draft ? (
+          <View style={{ gap: 10 }}>
+            {draft.map((we, i) => (
+              <EditExercise
+                key={we.id}
+                we={we}
+                onChange={(fn) => setDraft((d) => (d ? d.map((x, k) => (k === i ? fn(x) : x)) : d))}
+                onRemove={() => setDraft((d) => (d ? d.filter((_, k) => k !== i) : d))}
+              />
+            ))}
+            <Button label="SAVE CHANGES" icon="checkmark" onPress={saveEdit} style={{ marginTop: 6 }} />
+          </View>
+        ) : null}
+        <View style={{ gap: 10, display: editing ? 'none' : 'flex' }}>
           {w.exercises.map((we) => {
             const ex = getExercise(we.exercise_id);
             let n = 0;
@@ -202,5 +230,91 @@ export default function SessionScreen() {
       />
       <FxHost inSheet />
     </View>
+  );
+}
+
+/** Edit a logged exercise after the fact: fix numbers, add or delete sets. */
+function EditExercise({ we, onChange, onRemove }: { we: WorkoutExercise; onChange: (fn: (we: WorkoutExercise) => WorkoutExercise) => void; onRemove: () => void }) {
+  const { c, accent } = useTheme();
+  const exName = useExName();
+  const ex = getExercise(we.exercise_id);
+  const fields: (keyof SetEntry)[] =
+    ex.type === 'time' ? ['time'] : ex.type === 'cardio' ? ['time', 'dist'] : we.split ? ['weight', 'reps', 'reps_r'] : ['weight', 'reps'];
+  const head: Record<string, string> = { weight: ex.type === 'assisted' ? '−KG' : ex.type === 'bw_reps' ? '+KG' : 'KG', reps: we.split ? 'L' : 'REPS', reps_r: 'R', time: ex.type === 'cardio' ? 'MIN' : 'SEC', dist: 'KM' };
+  const setField = (id: string, f: keyof SetEntry, v: number | null) => onChange((x) => ({ ...x, sets: x.sets.map((st) => (st.id === id ? { ...st, [f]: v } : st)) }));
+  let n = 0;
+  return (
+    <Card style={{ padding: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Text style={{ flex: 1, fontFamily: fonts.semibold, fontSize: 16, color: accent }} numberOfLines={1}>
+          {exName(ex)}
+        </Text>
+        <Press tapHaptic hitSlop={8} onPress={onRemove}>
+          <Ionicons name="trash-outline" size={18} color={c.danger} />
+        </Press>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 4 }}>
+        <Txt variant="label" style={{ width: 26 }}>
+          SET
+        </Txt>
+        {fields.map((f) => (
+          <Txt key={f} variant="label" style={{ flex: 1, textAlign: 'center' }}>
+            {head[f]}
+          </Txt>
+        ))}
+        <View style={{ width: 26 }} />
+      </View>
+      {we.sets.map((st) => {
+        const lbl = st.type === 'warmup' ? 'W' : st.type === 'drop' ? 'D' : st.type === 'failure' ? 'F' : String(++n);
+        return (
+          <View key={st.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 }}>
+            <Text style={{ width: 26, fontFamily: fonts.display, fontSize: 17, color: st.type === 'normal' ? c.textDim : '#F59E0B' }}>{lbl}</Text>
+            {fields.map((f) => (
+              <EditNum key={f} value={(st[f] as number | null | undefined) ?? null} onChange={(v) => setField(st.id, f, v)} />
+            ))}
+            <Press tapHaptic hitSlop={8} onPress={() => onChange((x) => ({ ...x, sets: x.sets.filter((q) => q.id !== st.id) }))} style={{ width: 26, alignItems: 'center' }}>
+              <Ionicons name="close" size={18} color={c.textFaint} />
+            </Press>
+          </View>
+        );
+      })}
+      <Press
+        tapHaptic
+        onPress={() =>
+          onChange((x) => {
+            const last = x.sets[x.sets.length - 1];
+            const add: SetEntry = { id: uuid(), type: 'normal', weight: last?.weight ?? null, reps: last?.reps ?? null, reps_r: last?.reps_r ?? null, time: last?.time ?? null, dist: last?.dist ?? null, done: true, done_at: last?.done_at ?? null, pr: [] };
+            return { ...x, sets: [...x.sets, add] };
+          })
+        }
+        style={{ marginTop: 8, height: 36, borderRadius: 10, backgroundColor: c.surface2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+      >
+        <Ionicons name="add" size={16} color={c.textDim} />
+        <Text style={{ fontFamily: fonts.mono, fontSize: 11, letterSpacing: 1.4, color: c.textDim }}>ADD SET</Text>
+      </Press>
+    </Card>
+  );
+}
+
+function EditNum({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
+  const { c, accent, isDark } = useTheme();
+  const [text, setText] = useState(value === null ? '' : fmtKg(value));
+  return (
+    <TextInput
+      value={text}
+      onChangeText={(t) => {
+        const clean = t.replace(',', '.').replace(/[^0-9.]/g, '');
+        setText(clean);
+        const v = clean === '' ? null : Number(clean);
+        if (clean === '' || Number.isFinite(v)) onChange(v);
+      }}
+      keyboardType="decimal-pad"
+      keyboardAppearance={isDark ? 'dark' : 'light'}
+      selectionColor={accent}
+      selectTextOnFocus
+      placeholder="—"
+      placeholderTextColor={c.textFaint}
+      style={{ flex: 1, width: 0, minWidth: 0, height: 38, borderRadius: 9, borderWidth: 1, borderColor: c.borderStrong, textAlign: 'center', fontFamily: fonts.medium, fontSize: 16, color: c.text, paddingVertical: 0 }}
+    />
   );
 }
