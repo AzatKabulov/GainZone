@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,7 +24,8 @@ const TYPES: { id: LogType; label: string }[] = [
 export default function NewExercise() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const [name, setName] = useState('');
+  const params = useLocalSearchParams<{ name?: string }>();
+  const [name, setName] = useState(params.name ?? '');
   const [group, setGroup] = useState<GroupId>('chest');
   const [equip, setEquip] = useState<Equip>('machine');
   const [type, setType] = useState<LogType>('weight_reps');

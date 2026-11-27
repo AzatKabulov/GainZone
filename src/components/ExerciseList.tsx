@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { memo, useMemo, useState } from 'react';
 import { FlatList, View, type ListRenderItem } from 'react-native';
 
@@ -11,7 +12,7 @@ import { useData } from '@/store/data';
 import { alpha, useTheme } from '@/theme';
 import { EquipSheet, FilterButton, matchEquip, matchMuscle, MUSCLE_FILTERS, MuscleSheet } from './ExerciseFilters';
 import { ExerciseThumb } from './kit';
-import { Input, Press, Txt } from './ui';
+import { Button, Input, Press, Txt } from './ui';
 
 type Item = { kind: 'header'; key: string; label: string; count: number } | { kind: 'ex'; key: string; ex: ExerciseDef };
 
@@ -59,6 +60,7 @@ export function ExerciseList({
   const items = useMemo<Item[]>(() => {
     const list = searched.filter((e) => matchMuscle(e, muscle) && matchEquip(e, equip));
     if (q || muscle || equip) {
+      if (!list.length) return [];
       return [{ kind: 'header' as const, key: 'h-res', label: 'RESULTS', count: list.length }, ...list.map((ex) => ({ kind: 'ex' as const, key: ex.id, ex }))];
     }
     const out: Item[] = [];
@@ -143,10 +145,11 @@ export function ExerciseList({
         </View>
       }
       ListEmptyComponent={
-        <View style={{ alignItems: 'center', padding: 30 }}>
+        <View style={{ alignItems: 'center', padding: 30, gap: 12 }}>
           <Txt variant="small" color={c.textDim}>
             Nothing found.
           </Txt>
+          {q.trim() ? <Button label={`CREATE “${q.trim()}”`} icon="add" small variant="outline" onPress={() => router.push(`/exercise-new?name=${encodeURIComponent(q.trim())}`)} /> : null}
         </View>
       }
     />

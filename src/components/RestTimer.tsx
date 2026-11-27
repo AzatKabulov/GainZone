@@ -19,7 +19,10 @@ function useNextSet() {
   const w = useActive((s) => s.workout);
   const rest = useActive((s) => s.rest);
   if (!w || !rest) return null;
-  const start = Math.max(0, w.exercises.findIndex((e) => e.id === rest.weId));
+  let start = Math.max(0, w.exercises.findIndex((e) => e.id === rest.weId));
+  // after a superset round, the next set is back at the first exercise of the group
+  const group = w.exercises[start]?.superset;
+  if (group) while (start > 0 && w.exercises[start - 1].superset === group) start--;
   for (let i = start; i < w.exercises.length; i++) {
     const we = w.exercises[i];
     let n = 0;

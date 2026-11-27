@@ -31,7 +31,8 @@ function Body({ onClose }: { onClose: () => void }) {
     () =>
       Object.values(templates)
         .filter((t) => !t.deleted)
-        .sort((a, b) => (b.last_used_at ?? '').localeCompare(a.last_used_at ?? '') || a.sort_order - b.sort_order),
+        // rotation order: the routine you haven't done for longest first (same as UP NEXT on TRAIN)
+        .sort((a, b) => (a.last_used_at ?? '').localeCompare(b.last_used_at ?? '') || a.sort_order - b.sort_order),
     [templates],
   );
 
@@ -72,7 +73,7 @@ function Body({ onClose }: { onClose: () => void }) {
           ) : null}
         </View>
         <ScrollView contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }} showsVerticalScrollIndicator={false}>
-          {list.map((t) => (
+          {list.map((t, i) => (
             <Press
               key={t.id}
               scaleTo={0.98}
@@ -81,6 +82,11 @@ function Body({ onClose }: { onClose: () => void }) {
             >
               {t.exercises[0] ? <ExerciseThumb ex={getExercise(t.exercises[0].exercise_id)} size={42} /> : null}
               <View style={{ flex: 1 }}>
+                {i === 0 && list.length > 1 ? (
+                  <Txt variant="label" color={accent} style={{ fontSize: 9 }}>
+                    UP NEXT
+                  </Txt>
+                ) : null}
                 <Txt variant="title" numberOfLines={1}>
                   {t.name || 'Routine'}
                 </Txt>

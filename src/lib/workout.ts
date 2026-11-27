@@ -312,6 +312,12 @@ export function filledUnticked(): number {
   return (w?.exercises ?? []).reduce((a, we) => a + we.sets.filter((s) => !s.done && !s.auto && hasValue(s)).length, 0);
 }
 
+/** Unticked sets that hold any numbers at all (typed or prefilled) — the ones worth asking about. */
+export function untickedWithValues(): number {
+  const w = useActive.getState().workout;
+  return (w?.exercises ?? []).reduce((a, we) => a + we.sets.filter((s) => !s.done && hasValue(s)).length, 0);
+}
+
 /** Tick every set that has numbers typed in (used when finishing). */
 export function completeFilledSets() {
   const w = useActive.getState().workout;

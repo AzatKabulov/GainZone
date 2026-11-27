@@ -23,7 +23,7 @@ import { ensureNotificationPermission, startRest } from '@/lib/rest';
 import { addExerciseToMuscles, emptyMuscleStats, fmtDur, fmtElapsed, fmtVolume, workoutTotals } from '@/lib/stats';
 import { supersetInfo } from '@/lib/superset';
 import { useNow } from '@/lib/useNow';
-import { addExercises, completeFilledSets, discardWorkout, filledUnticked, finishCheck, finishWorkout, renameWorkout, setExerciseRest, setLiveDuration } from '@/lib/workout';
+import { addExercises, completeFilledSets, untickedWithValues, discardWorkout, filledUnticked, finishCheck, finishWorkout, renameWorkout, setExerciseRest, setLiveDuration } from '@/lib/workout';
 import { useActive } from '@/store/active';
 import { useFx } from '@/store/fx';
 import { fonts, useTheme } from '@/theme';
@@ -106,7 +106,8 @@ export default function WorkoutScreen() {
       useFx.getState().celebrate({ kind: 'workout', kicker: 'WORKOUT LOGGED', title: 'DONE.' });
       router.replace(`/finish/${id}`);
     };
-    if (chk.unfinished === 0) return go();
+    // empty unticked rows mean nothing — only ask when an unticked set has numbers in it
+    if (chk.unfinished === 0 || untickedWithValues() === 0) return go();
     const pl = (n: number) => `${n} set${n > 1 ? 's' : ''}`;
     openMenu(`${pl(chk.unfinished)} not ticked`, [
       ...(typed ? [{ label: `Tick ${pl(typed)} with numbers & finish`, onPress: () => (completeFilledSets(), go()) }] : []),
