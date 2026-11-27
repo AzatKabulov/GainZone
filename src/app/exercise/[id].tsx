@@ -9,7 +9,7 @@ import { Body3D } from '@/components/Body3D';
 import { LineChart } from '@/components/charts';
 import { FxHost } from '@/components/FxHost';
 import { exerciseColors, SheetHeader, Stat, useBodyPalette } from '@/components/kit';
-import { Card, Chip, ProgressBar, Section, Txt } from '@/components/ui';
+import { Button, Card, Chip, ProgressBar, Section, Txt } from '@/components/ui';
 import { muscleBreakdown } from '@/data/exercises';
 import { EQUIP_NAME } from '@/data/exerciseTypes';
 import { GROUP_NAME, MUSCLES, type MuscleId } from '@/data/muscles';
@@ -17,8 +17,10 @@ import { exIllustration, exName, useExercise } from '@/lib/exercise';
 import { haptic } from '@/lib/haptics';
 import { confirm } from '@/lib/menu';
 import { bestSet, e1rm, exerciseRecords, exerciseSessions, finishedWorkouts, fmtKg, fmtSetValue, fmtVolume, isWorking, setReps, topReps } from '@/lib/stats';
+import { useActive } from '@/store/active';
 import { useData } from '@/store/data';
 import { useFx } from '@/store/fx';
+import { addExercises } from '@/lib/workout';
 import { alpha, fonts, useTheme } from '@/theme';
 import { goBack } from '@/lib/nav';
 
@@ -34,6 +36,7 @@ export default function ExerciseScreen() {
   const insets = useSafeAreaInsets();
   const ex = useExercise(id);
   const illu = exIllustration(ex.id);
+  const live = useActive((st) => st.workout);
   const workouts = useData((s) => s.workouts);
   const sessions = useMemo(() => exerciseSessions(finishedWorkouts(workouts), id), [workouts, id]);
   const rec = useMemo(() => exerciseRecords(sessions, ex.type), [sessions, ex.type]);
@@ -186,6 +189,19 @@ export default function ExerciseScreen() {
             </Card>
           </>
         )}
+
+        {live && !live.exercises.some((e) => e.exercise_id === ex.id) ? (
+          <Button
+            label="ADD TO LIVE WORKOUT"
+            icon="add"
+            onPress={() => {
+              addExercises([ex.id]);
+              haptic.success();
+              useFx.getState().info('ADDED', `${exName(ex)} → ${live.name}`);
+            }}
+            style={{ marginTop: 22 }}
+          />
+        ) : null}
 
         {ex.custom ? (
           <View style={{ alignItems: 'center', marginTop: 18 }}>

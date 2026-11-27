@@ -165,7 +165,7 @@ export function addExercises(ids: string[]) {
 export function replaceExercise(weId: string, exerciseId: string) {
   mapEx(weId, (we) => {
     const fresh = buildExercise(exerciseId);
-    return { ...fresh, id: we.id, note: we.note, sets: fresh.sets.length ? fresh.sets : we.sets };
+    return { ...fresh, id: we.id, note: we.note, superset: we.superset ?? null, sets: fresh.sets.length ? fresh.sets : we.sets };
   });
 }
 
