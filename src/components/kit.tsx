@@ -5,7 +5,7 @@ import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import type { ExerciseDef } from '@/data/exerciseTypes';
 import { HEAT_COLORS, HEAT_COLORS_LIGHT, HEAT_LABEL, type HeatLevel, type MuscleId } from '@/data/muscles';
-import { exImage } from '@/lib/exercise';
+import { exImage, hasIllustration } from '@/lib/exercise';
 import { alpha, fonts, useTheme } from '@/theme';
 import { DARK_BODY, LIGHT_BODY } from './Body3D';
 import { Press, Txt } from './ui';
@@ -132,19 +132,20 @@ export function HeatLegend({ compact }: { compact?: boolean }) {
   );
 }
 
-/** Square 3D thumbnail of the working muscles (custom exercises get an icon). */
+/** Round exercise thumbnail: drawn illustration, or the 3D muscle render (custom exercises get an icon). */
 export function ExerciseThumb({ ex, size = 48 }: { ex: ExerciseDef; size?: number }) {
   const { c } = useTheme();
   const img = exImage(ex.id);
+  const drawn = hasIllustration(ex.id);
   return (
     <View
       style={{
         width: size,
         height: size,
-        borderRadius: size * 0.28,
+        borderRadius: size / 2,
         overflow: 'hidden',
-        backgroundColor: c.surface2,
-        borderWidth: 1,
+        backgroundColor: drawn ? '#F2EEE6' : c.surface2,
+        borderWidth: drawn ? 0 : 1,
         borderColor: c.border,
         alignItems: 'center',
         justifyContent: 'center',

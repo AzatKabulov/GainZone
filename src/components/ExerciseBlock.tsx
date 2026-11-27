@@ -5,7 +5,7 @@ import { Platform, Text, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
 import type { ExerciseDef } from '@/data/exerciseTypes';
-import { LOG_COLS, exImage, exName, useExercise } from '@/lib/exercise';
+import { LOG_COLS, exName, useExercise } from '@/lib/exercise';
 import { haptic } from '@/lib/haptics';
 import { openMenu } from '@/lib/menu';
 import { setPickHandler } from '@/lib/pick';
@@ -13,10 +13,9 @@ import { exerciseSessions, finishedWorkouts, fmtKg, fmtReps, previousForSets, re
 import { addSet, moveExercise, pinnedNote, removeExercise, removeSet, replaceExercise, setSplit, toggleSet, updateSet } from '@/lib/workout';
 import { useData, type SetEntry, type WorkoutExercise } from '@/store/data';
 import { alpha, fonts, useTheme } from '@/theme';
-import { Image } from 'expo-image';
 import { fmtRestLong } from './RestSheet';
 import { SwipeDelete } from './SwipeDelete';
-import { mix } from './kit';
+import { ExerciseThumb, mix } from './kit';
 import { Press, Txt } from './ui';
 
 export const KB_ACCESSORY = 'gain-kb';
@@ -55,7 +54,6 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   const single = ex.type === 'time';
   const canSplit = ex.type === 'weight_reps' || ex.type === 'bw_reps' || ex.type === 'assisted';
   const split = !!we.split && canSplit;
-  const img = exImage(ex.id);
   let workIdx = 0;
 
   const menu = () =>
@@ -81,9 +79,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
       {/* header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 }}>
         <Press scaleTo={0.94} onPress={() => router.push(`/exercise/${ex.id}`)}>
-          <View style={{ width: 46, height: 46, borderRadius: 23, overflow: 'hidden', backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}>
-            {img ? <Image source={img} style={{ width: 46, height: 46 }} contentFit="cover" /> : <Ionicons name="barbell-outline" size={20} color={c.textFaint} />}
-          </View>
+          <ExerciseThumb ex={ex} size={46} />
         </Press>
         <Press style={{ flex: 1 }} scaleTo={0.98} onPress={() => router.push(`/exercise/${ex.id}`)}>
           <Text numberOfLines={2} style={{ fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23, color: accent }}>

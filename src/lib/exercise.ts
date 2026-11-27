@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { BUILTIN_BY_ID, BUILTIN_EXERCISES, type ExerciseDef } from '@/data/exercises';
+import { EXERCISE_ILLUSTRATIONS } from '@/data/exerciseIllustrations';
 import { EXERCISE_IMAGES } from '@/data/exerciseImages';
 import { useData, type CustomExercise } from '@/store/data';
 
@@ -66,8 +67,19 @@ export function useExName() {
 }
 
 /** 3D thumbnail rendered from the anatomy model (null for custom exercises). */
+/** Small picture for lists: the drawn illustration when there is one, else the 3D muscle render. */
 export function exImage(id: string): number | null {
-  return EXERCISE_IMAGES[id] ?? null;
+  return EXERCISE_ILLUSTRATIONS[id]?.thumb ?? EXERCISE_IMAGES[id] ?? null;
+}
+
+/** Large drawn illustration of the movement (null until one exists for this exercise). */
+export function exIllustration(id: string): number | null {
+  return EXERCISE_ILLUSTRATIONS[id]?.full ?? null;
+}
+
+/** true when exImage() is a drawn illustration (light background) rather than a 3D render. */
+export function hasIllustration(id: string): boolean {
+  return !!EXERCISE_ILLUSTRATIONS[id];
 }
 
 export const LOG_COLS: Record<ExerciseDef['type'], [string, string]> = {

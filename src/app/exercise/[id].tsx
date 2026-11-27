@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
@@ -12,7 +13,7 @@ import { Card, Chip, ProgressBar, Section, Txt } from '@/components/ui';
 import { muscleBreakdown } from '@/data/exercises';
 import { EQUIP_NAME } from '@/data/exerciseTypes';
 import { GROUP_NAME, MUSCLES, type MuscleId } from '@/data/muscles';
-import { exName, useExercise } from '@/lib/exercise';
+import { exIllustration, exName, useExercise } from '@/lib/exercise';
 import { haptic } from '@/lib/haptics';
 import { confirm } from '@/lib/menu';
 import { bestSet, e1rm, exerciseRecords, exerciseSessions, finishedWorkouts, fmtKg, fmtSetValue, fmtVolume, isWorking, setReps, topReps } from '@/lib/stats';
@@ -31,6 +32,7 @@ export default function ExerciseScreen() {
   const palette = useBodyPalette();
   const insets = useSafeAreaInsets();
   const ex = useExercise(id);
+  const illu = exIllustration(ex.id);
   const workouts = useData((s) => s.workouts);
   const sessions = useMemo(() => exerciseSessions(finishedWorkouts(workouts), id), [workouts, id]);
   const rec = useMemo(() => exerciseRecords(sessions, ex.type), [sessions, ex.type]);
@@ -67,7 +69,12 @@ export default function ExerciseScreen() {
     <View style={{ flex: 1, backgroundColor: c.bgElevated }}>
       <SheetHeader kicker={`${GROUP_NAME[ex.group].toUpperCase()} · ${EQUIP_NAME[ex.equip].toUpperCase()}`} title={exName(ex).toUpperCase()} onClose={() => router.back()} />
       <ScrollView scrollEnabled={scrollOn} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 30 }}>
-        <View style={{ height: 380, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: c.border, backgroundColor: c.surface }}>
+        {illu ? (
+          <View style={{ aspectRatio: 1, maxHeight: 360, alignSelf: 'center', width: '100%', borderRadius: 20, overflow: 'hidden', backgroundColor: '#F2EEE6', marginBottom: 12 }}>
+            <Image source={illu} style={{ flex: 1 }} contentFit="contain" transition={150} />
+          </View>
+        ) : null}
+        <View style={{ height: illu ? 320 : 380, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: c.border, backgroundColor: c.surface }}>
           <Body3D
             colors={colors}
             palette={palette}
