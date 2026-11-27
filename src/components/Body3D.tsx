@@ -124,6 +124,8 @@ function getBody(): Decoded {
  * (no `supportsWebGL2`) is rejected up front; the caller then shows the flat fallback.
  */
 function createRenderer(gl: ExpoWebGLRenderingContext, canvas: HTMLCanvasElement): THREE.WebGLRenderer {
+  // test hook: lets the browser preview exercise the flat fallback
+  if ((globalThis as { __GAINZONE_FORCE_2D?: boolean }).__GAINZONE_FORCE_2D) throw new Error('forced 2D');
   const flags = gl as unknown as { supportsWebGL2?: boolean };
   if (Platform.OS !== 'web' && flags.supportsWebGL2 === false) throw new Error('WebGL 2 is not available');
   const g = globalThis as unknown as { WebGLRenderingContext?: unknown };
@@ -196,6 +198,8 @@ export interface Body3DProps {
   focus?: 'full' | 'upper' | 'lower';
   /** slow idle spin until touched */
   autoRotate?: boolean;
+  /** called once if 3D can't run here and the flat map is shown instead */
+  onFallback?: () => void;
   /** called with true when a drag starts and false when it ends (to lock a parent ScrollView) */
   onInteract?: (active: boolean) => void;
   /** show front and back side by side (static) */
@@ -225,6 +229,7 @@ export function Body3D({
   focus = 'full',
   autoRotate = false,
   onInteract,
+  onFallback,
   dual = false,
   interactive = true,
   style,
@@ -249,9 +254,9 @@ export function Body3D({
     size: { w: 0, h: 0 },
     pinch: 0,
   });
-  const props = useRef({ colors, palette, selected, onSelect, background, onInteract, ring });
+  const props = useRef({ colors, palette, selected, onSelect, background, onInteract, ring, onFallback });
   useLayoutEffect(() => {
-    props.current = { colors, palette, selected, onSelect, background, onInteract, ring };
+    props.current = { colors, palette, selected, onSelect, background, onInteract, ring, onFallback };
   });
 
   useEffect(() => {
@@ -386,6 +391,7 @@ export function Body3D({
     cancelAnimationFrame(st.current.raf);
     console.warn('Body3D: 3D view unavailable', e);
     setFailed(true);
+    props.current.onFallback?.();
   };
 
   const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
@@ -527,7 +533,11 @@ export function Body3D({
     setSize({ w: width, h: height });
   };
 
-  if (failed || dual) return <Body2D colors={colors} labels={!dual} style={[style, { paddingVertical: dual ? 2 : 16 }]} />;
+  if (failed || dual) {
+    // the selected muscle shows in the accent on the flat map
+    const flat = selected ? { ...colors, [selected]: ring ?? '#C9F03F' } : colors;
+    return <Body2D colors={flat} labels={!dual} style={[style, { paddingVertical: dual ? 2 : 16 }]} />;
+  }
 
   return (
     <View style={style} onLayout={onLayout} {...(interactive ? pan.panHandlers : {})} pointerEvents={interactive ? 'auto' : 'none'}>

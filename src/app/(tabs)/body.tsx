@@ -36,6 +36,7 @@ export default function BodyScreen() {
   const [facing, setFacing] = useState<{ angle: number; n: number }>({ angle: 0.32, n: 0 });
   const [scrollOn, setScrollOn] = useState(true);
   const [flip, setFlip] = useState(0);
+  const [flat, setFlat] = useState(false);
 
   const list = useMemo(() => finishedWorkouts(workouts), [workouts]);
   const stats = useMemo(() => muscleStats(list, period), [list, period]);
@@ -87,10 +88,11 @@ export default function BodyScreen() {
             flip={flip}
             ring={accent}
             autoRotate
+            onFallback={() => setFlat(true)}
             onInteract={(a) => setScrollOn(!a)}
             style={{ flex: 1 }}
           />
-          {!selected ? (
+          {!selected && !flat ? (
             <View pointerEvents="box-none" style={{ position: 'absolute', left: 20, right: 20, bottom: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Chip label="FRONT" onPress={() => setFacing((f) => ({ angle: 0, n: f.n + 1 }))} />
               <Chip label="BACK" onPress={() => setFacing((f) => ({ angle: Math.PI, n: f.n + 1 }))} />
