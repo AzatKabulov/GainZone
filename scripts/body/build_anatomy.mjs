@@ -5,7 +5,8 @@
  * - picks the skeletal-muscle structures, splits the coarse groups into the app's 20 regions
  *   (3 chest bands, 3 delt heads, biceps/triceps, abs/obliques, traps/upper back, lats…)
  * - welds + simplifies every mesh with meshoptimizer so the whole figure fits a phone
- * - adds the skin's head, hands and feet and a slightly shrunk dark "under-body" that fills gaps
+ * - decimates everything hard for a stylised low-poly look (drawn with flat facets in the app)
+ * - adds low-poly hands and feet and a faceless egg-shaped head; no bones
  * - writes src/data/bodyMesh.ts (base64 binary) [+ a JSON copy for previews]
  *
  * Usage: node scripts/body/build_anatomy.mjs [jsonOut]
@@ -162,6 +163,9 @@ const SIMPLIFY = {
   back_muscles: 0.16, forearm_muscles: 0.26, neck_muscles: 0.25, shoulder_muscles: 0.3, abdominal_muscles: 0.3,
   calf: 0.6, shin_muscles: 0.35, gluteal: 0.7, adductors: 0.7, rotator_cuff: 0.7, trapezius: 0.8,
 };
+// stylised low-poly figure: everything is decimated much harder and drawn with flat facets
+const LOW = Number(process.env.LOW ?? 0.16);
+const LOW_ERR = Number(process.env.LOW_ERR ?? 0.04);
 
 for (const side of ['l', 'r']) {
   const s = side === 'l' ? 1 : -1; // figure's left is +x
@@ -169,7 +173,7 @@ for (const side of ['l', 'r']) {
     lastName = `${k}_${side}`;
     const raw = meshes[`${k}_${side}`];
     const w = weld(raw);
-    return orient(simplify(w, SIMPLIFY[k] ?? 1));
+    return orient(simplify(w, (SIMPLIFY[k] ?? 1) * LOW, LOW_ERR));
   };
   const sh = anchor[`shoulder_${side}`];
   const el = anchor[`elbow_${side}`];
@@ -200,7 +204,14 @@ for (const side of ['l', 'r']) {
     const c = [sh[0] + ax[0] * t, sh[1] + ax[1] * t, sh[2] + ax[2] * t];
     return p[2] - c[2] > -0.004 ? L.biceps : L.triceps;
   });
-  addPart(get('forearm_muscles'), () => L.forearms);
+  // forearm (tendons running into the hand are cut at the wrist)
+  {
+    const m = get('forearm_muscles');
+    const wy = anchor[`wrist_${side}`][1] + 0.005;
+    const I = [];
+    for (let t = 0; t < m.I.length; t += 3) if ([0, 1, 2].every((k) => m.P[m.I[t + k] * 3 + 1] > wy)) I.push(m.I[t], m.I[t + 1], m.I[t + 2]);
+    addPart({ P: m.P, I }, () => L.forearms);
+  }
   // trapezius — upper part = traps, middle/lower = upper back
   addPart(get('trapezius'), (p) => (p[1] > 1.37 ? L.traps : L.upper_back));
   // shoulder girdle — lats (back, low or wide), rhomboids/teres (back, high), serratus etc. (front/side)
@@ -220,29 +231,73 @@ for (const side of ['l', 'r']) {
 }
 // abdominal wall — rectus in the middle front, obliques elsewhere
 lastName = 'abdominal_muscles';
-addPart(orient(simplify(weld(meshes.abdominal_muscles), SIMPLIFY.abdominal_muscles)), (p) => (Math.abs(p[0]) < 0.07 && p[2] > 0.0 ? L.abs : L.obliques));
+addPart(orient(simplify(weld(meshes.abdominal_muscles), SIMPLIFY.abdominal_muscles * LOW, LOW_ERR)), (p) => (Math.abs(p[0]) < 0.07 && p[2] > 0.0 ? L.abs : L.obliques));
 
-/* ───────── skin: head, hands, feet + dark under-body ───────── */
-const skin = orient(simplify(weld(meshes.skin), 0.36, 0.002));
+/* ───────── hands + feet (low-poly skin), a faceless egg for the head ───────── */
+const skin = orient(simplify(weld(meshes.skin), Number(process.env.SKIN_LOW ?? 0.06), 0.02));
+const headBox = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
 {
-  const keep = (p) => p[1] > 1.5 || (p[1] < 0.905 && Math.abs(p[0]) > 0.19) || p[1] < 0.085;
+  const keep = (p) => p[1] < 0.085;
   const I = [];
   for (let t = 0; t < skin.I.length; t += 3) {
     const vs = [skin.I[t], skin.I[t + 1], skin.I[t + 2]];
     if (vs.every((v) => keep([skin.P[v * 3], skin.P[v * 3 + 1], skin.P[v * 3 + 2]]))) I.push(...vs);
   }
-  addPart({ P: skin.P, I }, () => SKIN, 'skin');
+  addPart({ P: skin.P, I }, () => SKIN, 'feet');
+  const raw = meshes.skin.P;
+  for (let i = 0; i < raw.length; i += 3) {
+    if (raw[i + 1] < 1.56) continue;
+    for (let a = 0; a < 3; a++) {
+      headBox.min[a] = Math.min(headBox.min[a], raw[i + a]);
+      headBox.max[a] = Math.max(headBox.max[a], raw[i + a]);
+    }
+  }
 }
-// skeleton in a dark tone fills the gaps between muscles (knees, elbows, ribs, spine…)
-const BONES = {
-  pelvis: 0.5, sternum: 1, spine_cervical: 0.12, spine_thoracic: 0.15, spine_lumbar: 0.15,
-  ribs_l: 0.12, ribs_r: 0.12, clavicle_l: 1, clavicle_r: 1, scapula_l: 0.25, scapula_r: 0.25,
-  humerus_l: 1, humerus_r: 1, forearm_l: 1, forearm_r: 1, femur_l: 1, femur_r: 1,
-  patella_l: 1, patella_r: 1, lower_leg_l: 1, lower_leg_r: 1,
-};
-for (const [name, ratio] of Object.entries(BONES)) {
-  if (!meshes[name]) continue;
-  addPart(orient(simplify(weld(meshes[name]), ratio)), () => UNDER, name);
+/** Subdivided icosahedron → ellipsoid. */
+function egg(center, radii, detail = 2) {
+  const t = (1 + Math.sqrt(5)) / 2;
+  let P = [-1, t, 0, 1, t, 0, -1, -t, 0, 1, -t, 0, 0, -1, t, 0, 1, t, 0, -1, -t, 0, 1, -t, t, 0, -1, t, 0, 1, -t, 0, -1, -t, 0, 1];
+  let I = [0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11, 1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 7, 1, 8, 3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9, 4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1];
+  for (let d = 0; d < detail; d++) {
+    const cache = new Map();
+    const mid = (a, b) => {
+      const k = a < b ? `${a}_${b}` : `${b}_${a}`;
+      if (cache.has(k)) return cache.get(k);
+      P.push((P[a * 3] + P[b * 3]) / 2, (P[a * 3 + 1] + P[b * 3 + 1]) / 2, (P[a * 3 + 2] + P[b * 3 + 2]) / 2);
+      cache.set(k, P.length / 3 - 1);
+      return P.length / 3 - 1;
+    };
+    const next = [];
+    for (let i = 0; i < I.length; i += 3) {
+      const [a, b, c] = [I[i], I[i + 1], I[i + 2]];
+      const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
+      next.push(a, ab, ca, b, bc, ab, c, ca, bc, ab, bc, ca);
+    }
+    I = next;
+  }
+  const out = [];
+  for (let i = 0; i < P.length; i += 3) {
+    const l = Math.hypot(P[i], P[i + 1], P[i + 2]);
+    out.push(center[0] + (P[i] / l) * radii[0], center[1] + (P[i + 1] / l) * radii[1], center[2] + (P[i + 2] / l) * radii[2]);
+  }
+  return orient({ P: out, I });
+}
+{
+  const c = [0, 0, 0];
+  const r = [0, 0, 0];
+  for (let a = 0; a < 3; a++) {
+    c[a] = (headBox.min[a] + headBox.max[a]) / 2;
+    r[a] = (headBox.max[a] - headBox.min[a]) / 2;
+  }
+  // a touch slimmer than the real head (no ears / nose), sitting on the neck
+  addPart(egg([c[0], c[1] - 0.018, c[2] + 0.014], [r[0] * 0.8, r[1] * 1.16, r[2] * 0.7], 2), () => SKIN, 'head');
+  console.log('head', c.map((v) => v.toFixed(3)), r.map((v) => v.toFixed(3)));
+  // simple mitts for hands
+  for (const side of ['l', 'r']) {
+    const w = anchor[`wrist_${side}`];
+    const sx = side === 'l' ? 1 : -1;
+    addPart(egg([w[0] + 0.004 * sx, w[1] - 0.056, w[2] + 0.002], [0.021, 0.062, 0.03], 1), () => SKIN, `hand_${side}`);
+  }
 }
 
 /* ───────── merge + soft region borders ───────── */
@@ -272,7 +327,7 @@ lab2.set(lab);
 for (let t = 0; t < T; t += 3) {
   const [a, b, c] = [ind[t], ind[t + 1], ind[t + 2]];
   for (const [x, y] of [[a, b], [b, c], [c, a]]) {
-    if (lab[x] !== lab[y] && lab[x] < 253 && lab[y] < 253) {
+    if (process.env.SOFT && lab[x] !== lab[y] && lab[x] < 253 && lab[y] < 253) {
       lab2[x] = lab[y];
       blend[x] = 110;
       lab2[y] = lab[x];

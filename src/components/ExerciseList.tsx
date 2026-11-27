@@ -1,16 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useMemo, useState } from 'react';
-import { FlatList, ScrollView, View, type ListRenderItem } from 'react-native';
+import { FlatList, View, type ListRenderItem } from 'react-native';
 
 import { muscleBreakdown, searchExercises, type ExerciseDef } from '@/data/exercises';
-import { EQUIP_NAME } from '@/data/exerciseTypes';
-import { GROUPS, MUSCLES, type GroupId } from '@/data/muscles';
+import { EQUIP_NAME, type Equip } from '@/data/exerciseTypes';
+import { GROUPS, MUSCLES } from '@/data/muscles';
 import { useAllExercises, useExName } from '@/lib/exercise';
 import { finishedWorkouts } from '@/lib/stats';
 import { useData } from '@/store/data';
 import { alpha, useTheme } from '@/theme';
+import { EquipSheet, FilterButton, matchEquip, matchMuscle, MUSCLE_FILTERS, MuscleSheet } from './ExerciseFilters';
 import { ExerciseThumb } from './kit';
-import { Chip, Input, Press, Txt } from './ui';
+import { Input, Press, Txt } from './ui';
 
 type Item = { kind: 'header'; key: string; label: string; count: number } | { kind: 'ex'; key: string; ex: ExerciseDef };
 
@@ -30,7 +31,9 @@ export function ExerciseList({
   const all = useAllExercises();
   const workouts = useData((s) => s.workouts);
   const [q, setQ] = useState('');
-  const [group, setGroup] = useState<GroupId | 'all' | 'recent'>('all');
+  const [muscle, setMuscle] = useState<string | null>(null);
+  const [equip, setEquip] = useState<Equip | null>(null);
+  const [sheet, setSheet] = useState<'muscle' | 'equip' | null>(null);
 
   const usage = useMemo(() => {
     const m = new Map<string, number>();
@@ -39,12 +42,19 @@ export function ExerciseList({
     return m;
   }, [workouts]);
 
+  const searched = useMemo(() => (q ? searchExercises(all, q) : all), [all, q]);
+
   const items = useMemo<Item[]>(() => {
-    let list = q ? searchExercises(all, q) : all;
-    if (group === 'recent') list = list.filter((e) => usage.has(e.id)).sort((a, b) => (usage.get(b.id) ?? 0) - (usage.get(a.id) ?? 0));
-    else if (group !== 'all') list = list.filter((e) => e.group === group);
-    if (q || group === 'recent') return list.map((ex) => ({ kind: 'ex' as const, key: ex.id, ex }));
+    const list = searched.filter((e) => matchMuscle(e, muscle) && matchEquip(e, equip));
+    if (q || muscle || equip) {
+      return [{ kind: 'header' as const, key: 'h-res', label: 'RESULTS', count: list.length }, ...list.map((ex) => ({ kind: 'ex' as const, key: ex.id, ex }))];
+    }
     const out: Item[] = [];
+    const recent = list.filter((e) => usage.has(e.id)).sort((a, b) => (usage.get(b.id) ?? 0) - (usage.get(a.id) ?? 0)).slice(0, 6);
+    if (recent.length) {
+      out.push({ kind: 'header', key: 'h-recent', label: 'RECENT', count: recent.length });
+      for (const ex of recent) out.push({ kind: 'ex', key: `r-${ex.id}`, ex });
+    }
     for (const g of GROUPS) {
       const inG = list.filter((e) => e.group === g.id);
       if (!inG.length) continue;
@@ -52,7 +62,11 @@ export function ExerciseList({
       for (const ex of inG) out.push({ kind: 'ex', key: ex.id, ex });
     }
     return out;
-  }, [all, q, group, usage]);
+  }, [searched, q, muscle, equip, usage]);
+
+  const muscleCount = (id: string | null) => searched.filter((e) => matchMuscle(e, id) && matchEquip(e, equip)).length;
+  const equipCount = (e: Equip | null) => searched.filter((x) => matchMuscle(x, muscle) && matchEquip(x, e)).length;
+  const muscleLabel = MUSCLE_FILTERS.find((f) => f.id === muscle)?.label;
 
   const sel = useMemo(() => new Set(selected ?? []), [selected]);
 
@@ -90,13 +104,30 @@ export function ExerciseList({
               <Ionicons name="search" size={17} color={c.textFaint} style={{ position: 'absolute', left: 14, top: 15 }} />
             </View>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20, paddingTop: 12 }}>
-            <Chip label="ALL" active={group === 'all'} onPress={() => setGroup('all')} />
-            {usage.size ? <Chip label="RECENT" icon="time-outline" active={group === 'recent'} onPress={() => setGroup('recent')} /> : null}
-            {GROUPS.map((g) => (
-              <Chip key={g.id} label={g.name.toUpperCase()} active={group === g.id} onPress={() => setGroup(g.id)} />
-            ))}
-          </ScrollView>
+          <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingTop: 10 }}>
+            <FilterButton label={equip ? EQUIP_NAME[equip] : 'All Equipment'} active={!!equip} onPress={() => setSheet('equip')} onClear={() => setEquip(null)} />
+            <FilterButton label={muscleLabel ?? 'All Muscles'} active={!!muscle} onPress={() => setSheet('muscle')} onClear={() => setMuscle(null)} />
+          </View>
+          <MuscleSheet
+            visible={sheet === 'muscle'}
+            value={muscle}
+            countFor={muscleCount}
+            onClose={() => setSheet(null)}
+            onApply={(id) => {
+              setMuscle(id);
+              setSheet(null);
+            }}
+          />
+          <EquipSheet
+            visible={sheet === 'equip'}
+            value={equip}
+            countFor={equipCount}
+            onClose={() => setSheet(null)}
+            onApply={(e) => {
+              setEquip(e);
+              setSheet(null);
+            }}
+          />
         </View>
       }
       ListEmptyComponent={

@@ -156,7 +156,7 @@ export default function FinishScreen() {
           <Section label="MUSCLES WORKED" count={worked.length} style={{ marginTop: 24, marginBottom: 12 }} />
           <Card>
             <View style={{ height: 330, marginHorizontal: -16, marginVertical: -16, borderRadius: 16, overflow: 'hidden' }}>
-              <Body3D colors={colors} palette={palette} background={c.surface} autoRotate onInteract={(a) => setScrollOn(!a)} style={{ flex: 1 }} />
+              <Body3D colors={colors} palette={palette} ring={accent} background={c.surface} autoRotate onInteract={(a) => setScrollOn(!a)} style={{ flex: 1 }} />
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
               {worked.map((m) => (

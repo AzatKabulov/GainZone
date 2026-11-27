@@ -15,6 +15,8 @@ import { useData, type SetEntry, type WorkoutExercise } from '@/store/data';
 import { alpha, fonts, useTheme } from '@/theme';
 import { Image } from 'expo-image';
 import { fmtRestLong } from './RestSheet';
+import { SwipeDelete } from './SwipeDelete';
+import { mix } from './kit';
 import { Press, Txt } from './ui';
 
 export const KB_ACCESSORY = 'gain-kb';
@@ -146,7 +148,9 @@ export const ExerciseBlock = memo(function ExerciseBlock({
         const label = s.type === 'normal' ? String(++workIdx) : SET_LABEL[s.type];
         return (
           <Animated.View key={s.id} entering={FadeIn.duration(220)} exiting={FadeOut.duration(160)} layout={LinearTransition.springify().damping(18)}>
-            <SetRow weId={we.id} s={s} label={label} prev={prevs[i]} ex={ex} split={split} />
+            <SwipeDelete onDelete={() => removeSet(we.id, s.id)}>
+              <SetRow weId={we.id} s={s} label={label} prev={prevs[i]} ex={ex} split={split} />
+            </SwipeDelete>
           </Animated.View>
         );
       })}
@@ -216,7 +220,7 @@ const SetRow = memo(function SetRow({ weId, s, label, prev, ex, split }: { weId:
   };
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 5, gap: W.gap, backgroundColor: s.done ? alpha(accent, 0.12) : 'transparent' }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 5, gap: W.gap, backgroundColor: s.done ? mix(c.bg, accent, 0.12) : c.bg }}>
       <Press
         onPress={setMenu}
         scaleTo={0.9}

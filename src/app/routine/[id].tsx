@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fmtRest, REST_PRESETS } from '@/components/ExerciseBlock';
 import { FxHost } from '@/components/FxHost';
+import { SwipeDelete } from '@/components/SwipeDelete';
 import { ExerciseThumb, FieldLabel, SheetHeader } from '@/components/kit';
 import { Button, Empty, Input, Press, Txt } from '@/components/ui';
 import { exName, getExercise, LOG_COLS } from '@/lib/exercise';
@@ -217,13 +218,14 @@ function RoutineExercise({
         ) : (
           <Head flex>{cols[1]}</Head>
         )}
-        <View style={{ width: 28 }} />
       </View>
       {t.sets.map((s, k) => {
         const warm = s.type === 'warmup';
         if (!warm) n++;
         return (
-          <Animated.View key={k} entering={FadeIn.duration(200)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
+          <Animated.View key={k} entering={FadeIn.duration(200)}>
+           <SwipeDelete onDelete={() => onChange((x) => ({ ...x, sets: x.sets.filter((_, j) => j !== k) }))}>
+           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4, backgroundColor: c.surface }}>
             <Press
               onPress={() => setSet(k, { type: warm ? 'normal' : 'warmup' })}
               style={{ width: 32, height: 36, borderRadius: 9, backgroundColor: c.surface2, alignItems: 'center', justifyContent: 'center' }}
@@ -244,9 +246,8 @@ function RoutineExercise({
                 onChange={(v) => setSet(k, ex.type === 'cardio' ? { dist: v } : timeOnly ? { time: v } : { reps: v })}
               />
             )}
-            <Press hitSlop={8} onPress={() => onChange((x) => ({ ...x, sets: x.sets.filter((_, j) => j !== k) }))} style={{ width: 28, alignItems: 'center' }}>
-              <Ionicons name="close" size={18} color={c.textFaint} />
-            </Press>
+           </View>
+           </SwipeDelete>
           </Animated.View>
         );
       })}

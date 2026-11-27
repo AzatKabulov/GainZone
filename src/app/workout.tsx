@@ -136,7 +136,7 @@ export default function WorkoutScreen() {
           <Metric label="VOLUME" value={`${fmtVolume(totals.volume)} kg`} />
           <Metric label="SETS" value={String(totals.sets)} />
           <View style={{ width: 84, height: 70 }}>
-            <Body3D colors={worked} palette={palette} background={c.bg} dual interactive={false} style={{ flex: 1 }} />
+            <Body3D colors={worked} palette={palette} ring={accent} background={c.bg} dual interactive={false} style={{ flex: 1 }} />
           </View>
         </View>
       </View>

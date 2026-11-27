@@ -25,7 +25,7 @@ const PERIODS = [
 ];
 
 export default function BodyScreen() {
-  const { c, isDark } = useTheme();
+  const { c, accent, isDark } = useTheme();
   const palette = useBodyPalette();
   const { height: winH } = useWindowDimensions();
   const workouts = useData((s) => s.workouts);
@@ -35,6 +35,7 @@ export default function BodyScreen() {
   const [selected, setSelected] = useState<MuscleId | null>(null);
   const [facing, setFacing] = useState<{ angle: number; n: number }>({ angle: 0.32, n: 0 });
   const [scrollOn, setScrollOn] = useState(true);
+  const [flip, setFlip] = useState(0);
 
   const list = useMemo(() => finishedWorkouts(workouts), [workouts]);
   const stats = useMemo(() => muscleStats(list, period), [list, period]);
@@ -83,13 +84,22 @@ export default function BodyScreen() {
             onSelect={select}
             shift={selected ? -0.45 : 0}
             facing={facing}
+            flip={flip}
+            ring={accent}
+            autoRotate
             onInteract={(a) => setScrollOn(!a)}
             style={{ flex: 1 }}
           />
           {!selected ? (
-            <View pointerEvents="box-none" style={{ position: 'absolute', left: 20, right: 20, bottom: 8, flexDirection: 'row', gap: 8 }}>
+            <View pointerEvents="box-none" style={{ position: 'absolute', left: 20, right: 20, bottom: 8, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Chip label="FRONT" onPress={() => setFacing((f) => ({ angle: 0, n: f.n + 1 }))} />
               <Chip label="BACK" onPress={() => setFacing((f) => ({ angle: Math.PI, n: f.n + 1 }))} />
+              <Chip icon="sync" label="TURN" onPress={() => setFlip((n) => n + 1)} />
+              <View style={{ flex: 1 }} />
+              <Ionicons name="hand-left-outline" size={13} color={c.textFaint} />
+              <Txt variant="label" color={c.textFaint} style={{ fontSize: 9 }}>
+                DRAG TO SPIN
+              </Txt>
             </View>
           ) : null}
           {selected ? <MusclePanel id={selected} st={stats[selected]} weeks={weeks} color={colors[selected] ?? palette.idle} onClose={() => select(null)} height={modelH} /> : null}

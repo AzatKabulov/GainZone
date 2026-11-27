@@ -71,6 +71,7 @@ export default function ExerciseScreen() {
           <Body3D
             colors={colors}
             palette={palette}
+            ring={accent}
             background={c.surface}
             selected={sel}
             onSelect={(m) => {

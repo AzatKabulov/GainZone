@@ -8,9 +8,9 @@ import { BODY_MESH } from '@/data/bodyMesh';
 import type { MuscleId } from '@/data/muscles';
 
 /**
- * Anatomical 3D figure (BodyParts3D muscles via open-anatomy-3d, CC BY 4.0), rendered with three.js on expo-gl.
- * Every vertex carries a muscle region, so the whole body is one mesh that is recoloured on the fly.
- * One finger rotates, two fingers zoom, a tap selects a muscle.
+ * Stylised low-poly muscle figure (built from BodyParts3D via open-anatomy-3d, CC BY 4.0), rendered with
+ * three.js on expo-gl. Every facet carries a muscle region, so the whole body is one flat-shaded mesh that is
+ * recoloured on the fly. One finger spins it, two fingers zoom, a tap selects a muscle.
  */
 
 export const ANATOMY_CREDIT = 'Anatomy: BodyParts3D © DBCLS (CC BY 4.0) via open-anatomy-3d';
@@ -19,11 +19,12 @@ const SKIN = 255;
 const UNDER = 254;
 const IDLE_LABEL = 253;
 
+
 interface Decoded {
+  /** non-indexed, flat-shaded triangles */
   geometry: THREE.BufferGeometry;
-  lab: Uint8Array;
-  lab2: Uint8Array;
-  blend: Uint8Array;
+  /** region of every triangle */
+  faceLab: Uint8Array;
   center: number;
   height: number;
 }
@@ -54,7 +55,7 @@ function decodeBase64(b64: string): Uint8Array {
   return out;
 }
 
-/** Decode the packed mesh once per app run. */
+/** Decode the packed mesh once per app run and unweld it into flat facets. */
 function getBody(): Decoded {
   if (cache) return cache;
   const M = BODY_MESH;
@@ -68,24 +69,50 @@ function getBody(): Decoded {
   };
   const V = M.vertexCount;
   const pos = take(Int16Array, V * 3, M.sizes[0]);
-  const nor = take(Int8Array, V * 3, M.sizes[1]);
+  take(Int8Array, V * 3, M.sizes[1]); // smooth normals: unused by the faceted look
   const lab = take(Uint8Array, V, M.sizes[2]);
-  const lab2 = take(Uint8Array, V, M.sizes[3]);
-  const blend = take(Uint8Array, V, M.sizes[4]);
+  take(Uint8Array, V, M.sizes[3]);
+  take(Uint8Array, V, M.sizes[4]);
   const ind = M.bigIndex ? take(Uint32Array, M.indexCount, M.sizes[5]) : take(Uint16Array, M.indexCount, M.sizes[5]);
   const P = new Float32Array(V * 3);
-  const N = new Float32Array(V * 3);
   for (let i = 0; i < V; i++)
-    for (let a = 0; a < 3; a++) {
-      P[i * 3 + a] = M.min[a] + ((pos[i * 3 + a] + 32768) / 65535) * (M.max[a] - M.min[a]);
-      N[i * 3 + a] = nor[i * 3 + a] / 127;
+    for (let a = 0; a < 3; a++) P[i * 3 + a] = M.min[a] + ((pos[i * 3 + a] + 32768) / 65535) * (M.max[a] - M.min[a]);
+
+  const F = M.indexCount / 3;
+  const fp = new Float32Array(F * 9);
+  const fn = new Float32Array(F * 9);
+  const faceLab = new Uint8Array(F);
+  for (let f = 0; f < F; f++) {
+    const a = ind[f * 3] * 3;
+    const b = ind[f * 3 + 1] * 3;
+    const c = ind[f * 3 + 2] * 3;
+    const la = lab[a / 3];
+    const lb = lab[b / 3];
+    const lc = lab[c / 3];
+    faceLab[f] = lb === lc ? lb : la;
+    const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+    const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const l = Math.hypot(nx, ny, nz) || 1;
+    nx /= l;
+    ny /= l;
+    nz /= l;
+    let k = f * 9;
+    for (const v of [a, b, c]) {
+      fp[k] = P[v];
+      fp[k + 1] = P[v + 1];
+      fp[k + 2] = P[v + 2];
+      fn[k] = nx;
+      fn[k + 1] = ny;
+      fn[k + 2] = nz;
+      k += 3;
     }
+  }
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(P, 3));
-  geometry.setAttribute('normal', new THREE.BufferAttribute(N, 3));
-  geometry.setIndex(new THREE.BufferAttribute(ind, 1));
+  geometry.setAttribute('position', new THREE.BufferAttribute(fp, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(fn, 3));
   geometry.computeBoundingSphere();
-  cache = { geometry, lab, lab2, blend, center: (M.min[1] + M.max[1]) / 2, height: M.max[1] - M.min[1] };
+  cache = { geometry, faceLab, center: (M.min[1] + M.max[1]) / 2, height: M.max[1] - M.min[1] };
   return cache;
 }
 
@@ -95,8 +122,8 @@ export interface BodyPalette {
   idle: string;
 }
 
-export const DARK_BODY: BodyPalette = { skin: '#26262B', under: '#121215', idle: '#4C4C55' };
-export const LIGHT_BODY: BodyPalette = { skin: '#9C968B', under: '#6E6A63', idle: '#C9C3B7' };
+export const DARK_BODY: BodyPalette = { skin: '#55555F', under: '#17171B', idle: '#6A6A75' };
+export const LIGHT_BODY: BodyPalette = { skin: '#A9A49A', under: '#8A857C', idle: '#C4BEB2' };
 
 function paint(geo: THREE.BufferGeometry, d: Decoded, colors: Partial<Record<MuscleId, string>>, palette: BodyPalette, selected: MuscleId | null) {
   const muscles = BODY_MESH.muscles as MuscleId[];
@@ -117,13 +144,13 @@ function paint(geo: THREE.BufferGeometry, d: Decoded, colors: Partial<Record<Mus
   }
   const col = geo.getAttribute('color') as THREE.BufferAttribute;
   const arr = col.array as Float32Array;
-  const tmp = new THREE.Color();
-  for (let i = 0; i < d.lab.length; i++) {
-    tmp.copy(table[d.lab[i]]);
-    if (d.blend[i]) tmp.lerp(table[d.lab2[i]], (d.blend[i] / 255) * 0.5);
-    arr[i * 3] = tmp.r;
-    arr[i * 3 + 1] = tmp.g;
-    arr[i * 3 + 2] = tmp.b;
+  for (let f = 0; f < d.faceLab.length; f++) {
+    const t = table[d.faceLab[f]];
+    for (let k = f * 9; k < f * 9 + 9; k += 3) {
+      arr[k] = t.r;
+      arr[k + 1] = t.g;
+      arr[k + 2] = t.b;
+    }
   }
   col.needsUpdate = true;
 }
@@ -132,12 +159,16 @@ export interface Body3DProps {
   colors: Partial<Record<MuscleId, string>>;
   palette: BodyPalette;
   background: string;
+  /** colour of the floor ring (the accent) */
+  ring?: string;
   selected?: MuscleId | null;
   onSelect?: (m: MuscleId | null) => void;
   /** horizontal shift of the figure (−1 … 1), used to make room for a side panel */
   shift?: number;
   /** turn to an angle (0 = front, π = back) when this changes */
   facing?: { angle: number; n: number };
+  /** turn 180° (to the nearest front / back view) whenever this number changes */
+  flip?: number;
   /** start angle */
   initialAngle?: number;
   /** frame only the upper body / lower body */
@@ -163,10 +194,12 @@ export function Body3D({
   colors,
   palette,
   background,
+  ring,
   selected = null,
   onSelect,
   shift = 0,
   facing,
+  flip = 0,
   initialAngle = 0.32,
   focus = 'full',
   autoRotate = false,
@@ -181,6 +214,7 @@ export function Body3D({
     scene: null as THREE.Scene | null,
     camera: null as THREE.PerspectiveCamera | null,
     mesh: null as THREE.Mesh | null,
+    ring: null as THREE.Mesh | null,
     rotY: initialAngle,
     targetY: NaN,
     velY: 0,
@@ -194,9 +228,9 @@ export function Body3D({
     size: { w: 0, h: 0 },
     pinch: 0,
   });
-  const props = useRef({ colors, palette, selected, onSelect, background, onInteract });
+  const props = useRef({ colors, palette, selected, onSelect, background, onInteract, ring });
   useLayoutEffect(() => {
-    props.current = { colors, palette, selected, onSelect, background, onInteract };
+    props.current = { colors, palette, selected, onSelect, background, onInteract, ring };
   });
 
   useEffect(() => {
@@ -228,6 +262,24 @@ export function Body3D({
     s.dirty = true;
   }, [facing]);
 
+  const flipped = useRef(flip);
+  useEffect(() => {
+    if (flip === flipped.current) return;
+    flipped.current = flip;
+    const s = st.current;
+    const from = Number.isNaN(s.targetY) ? s.rotY : s.targetY;
+    s.targetY = Math.round((from + Math.PI) / Math.PI) * Math.PI;
+    s.velY = 0;
+    s.spin = false;
+    s.dirty = true;
+  }, [flip]);
+
+  useEffect(() => {
+    const s = st.current;
+    if (s.ring) (s.ring.material as THREE.MeshBasicMaterial).color.set(ring ?? '#C9F03F');
+    s.dirty = true;
+  }, [ring]);
+
   useEffect(() => () => cancelAnimationFrame(st.current.raf), []);
 
   function pick(x: number, y: number) {
@@ -238,8 +290,8 @@ export function Body3D({
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2((x / w) * 2 - 1, -(y / h) * 2 + 1), s.camera);
     const hit = ray.intersectObject(s.mesh, false)[0];
-    if (!hit?.face) return props.current.onSelect(null);
-    const l = getBody().lab[hit.face.a];
+    if (!hit || hit.faceIndex == null) return props.current.onSelect(null);
+    const l = getBody().faceLab[hit.faceIndex];
     const muscles = BODY_MESH.muscles as MuscleId[];
     const id = l < muscles.length ? muscles[l] : null;
     props.current.onSelect(id && id !== props.current.selected ? id : null);
@@ -333,32 +385,33 @@ export function Body3D({
     scene.background = new THREE.Color(props.current.background);
     const camera = new THREE.PerspectiveCamera(28, dual ? w / 2 / h : w / h, 0.05, 20);
 
-    scene.add(new THREE.HemisphereLight('#f2eee6', '#141416', 1.0));
-    const key = new THREE.DirectionalLight('#ffffff', 2.4);
-    key.position.set(1.5, 2.5, 3);
+    scene.add(new THREE.HemisphereLight('#e8ecf5', '#101014', 0.9));
+    const key = new THREE.DirectionalLight('#ffffff', 2.6);
+    key.position.set(1.2, 2.2, 3);
     scene.add(key);
-    const fill = new THREE.DirectionalLight('#bcc8ff', 0.7);
-    fill.position.set(-2.5, 0.8, 1.5);
-    scene.add(fill);
-    const rim = new THREE.DirectionalLight('#ffffff', 2.0);
-    rim.position.set(-0.5, 1.8, -3);
+    const rim = new THREE.DirectionalLight('#9fb4ff', 1.6);
+    rim.position.set(-1.5, 1.5, -2.5);
     scene.add(rim);
 
     const body = getBody();
-    // shared positions / normals / indices, own colours (several figures can be on screen)
+    // shared positions / normals, own colours (several figures can be on screen)
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', body.geometry.getAttribute('position'));
     geo.setAttribute('normal', body.geometry.getAttribute('normal'));
-    geo.setIndex(body.geometry.getIndex());
-    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(body.lab.length * 3), 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(body.faceLab.length * 9), 3));
     geo.boundingSphere = body.geometry.boundingSphere;
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.1 });
+    const under = new THREE.Color(props.current.palette.under);
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide });
     mat.onBeforeCompile = (sh) => {
       sh.fragmentShader = sh.fragmentShader.replace(
         '#include <dithering_fragment>',
         `#include <dithering_fragment>
-        float fres = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
-        gl_FragColor.rgb += fres * vec3(0.14, 0.15, 0.18);`,
+        vec3 base = vColor.rgb;
+        float sat = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
+        gl_FragColor.rgb += base * sat * 0.15;
+        float fres = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 2.5);
+        gl_FragColor.rgb += fres * mix(vec3(0.10, 0.11, 0.14), base, sat);
+        if (!gl_FrontFacing) gl_FragColor.rgb = vec3(${under.r.toFixed(3)}, ${under.g.toFixed(3)}, ${under.b.toFixed(3)});`,
       );
     };
     const mesh = new THREE.Mesh(geo, mat);
@@ -366,16 +419,19 @@ export function Body3D({
     paint(geo, body, props.current.colors, props.current.palette, props.current.selected ?? null);
     scene.add(mesh);
 
-    // soft floor shadow
-    const disc = new THREE.Mesh(
-      new THREE.CircleGeometry(0.36, 48),
-      new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.4 }),
+    // floor: soft shadow + a thin ring in the accent (a little pedestal)
+    const disc = new THREE.Group();
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.34, 48), new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.45 }));
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.4, 0.412, 72),
+      new THREE.MeshBasicMaterial({ color: props.current.ring ?? '#C9F03F', transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
     );
+    disc.add(shadow, ring);
     disc.rotation.x = -Math.PI / 2;
     disc.position.y = -body.center + 0.002;
     scene.add(disc);
 
-    Object.assign(s, { renderer, scene, camera, mesh, dirty: true });
+    Object.assign(s, { renderer, scene, camera, mesh, ring, dirty: true });
 
     const loop = () => {
       s.raf = requestAnimationFrame(loop);

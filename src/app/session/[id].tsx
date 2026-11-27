@@ -151,7 +151,7 @@ export default function SessionScreen() {
 
         <Card style={{ marginTop: 12 }}>
           <View style={{ height: 300, marginHorizontal: -16, marginVertical: -16, borderRadius: 16, overflow: 'hidden' }}>
-              <Body3D colors={colors} palette={palette} background={c.surface} autoRotate onInteract={(a) => setScrollOn(!a)} style={{ flex: 1 }} />
+              <Body3D colors={colors} palette={palette} ring={accent} background={c.surface} autoRotate onInteract={(a) => setScrollOn(!a)} style={{ flex: 1 }} />
             </View>
         </Card>
 

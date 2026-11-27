@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { router } from 'expo-router';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
+import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,11 +12,11 @@ import { fmtElapsed } from '@/lib/stats';
 import { useNow } from '@/lib/useNow';
 import { useActive } from '@/store/active';
 import { alpha, fonts, useTheme } from '@/theme';
+import { StartSheet } from './StartSheet';
 import type { IconName } from './ui';
 
 const TABS: Record<string, { label: string; icon: IconName; iconOff: IconName }> = {
   index: { label: 'TRAIN', icon: 'barbell', iconOff: 'barbell-outline' },
-  history: { label: 'LOG', icon: 'calendar', iconOff: 'calendar-outline' },
   body: { label: 'BODY', icon: 'body', iconOff: 'body-outline' },
   library: { label: 'LIBRARY', icon: 'albums', iconOff: 'albums-outline' },
   profile: { label: 'YOU', icon: 'person', iconOff: 'person-outline' },
@@ -25,6 +26,7 @@ export function TabBar({ state, emitter, navigateToTab }: BottomTabBarProps) {
   const { c, accent, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const live = useActive((s) => !!s.workout);
+  const [startOpen, setStartOpen] = useState(false);
 
   return (
     <View pointerEvents="box-none" style={styles.outer}>
@@ -46,6 +48,18 @@ export function TabBar({ state, emitter, navigateToTab }: BottomTabBarProps) {
           {state.routes.map((route, index) => {
             const meta = TABS[route.name];
             if (!meta) return null;
+            const center =
+              route.name === 'library' ? (
+                <WorkoutButton
+                  key="workout"
+                  live={live}
+                  onPress={() => {
+                    haptic.medium();
+                    if (useActive.getState().workout) router.push('/workout');
+                    else setStartOpen(true);
+                  }}
+                />
+              ) : null;
             const focused = state.index === index;
             const onPress = () => {
               const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
@@ -54,7 +68,8 @@ export function TabBar({ state, emitter, navigateToTab }: BottomTabBarProps) {
                 navigateToTab(route.key);
               }
             };
-            return (
+            return [
+              center,
               <Pressable key={route.key} onPress={onPress} style={styles.item} hitSlop={4}>
                 <Indicator active={focused} color={accent} />
                 <Ionicons name={focused ? meta.icon : meta.iconOff} size={22} color={focused ? accent : c.textFaint} />
@@ -69,12 +84,42 @@ export function TabBar({ state, emitter, navigateToTab }: BottomTabBarProps) {
                 >
                   {meta.label}
                 </Text>
-              </Pressable>
-            );
+              </Pressable>,
+            ];
           })}
         </View>
       </View>
+      <StartSheet visible={startOpen} onClose={() => setStartOpen(false)} />
     </View>
+  );
+}
+
+/** Raised accent button in the middle of the tab bar: start a workout, or jump back into the live one. */
+function WorkoutButton({ live, onPress }: { live: boolean; onPress: () => void }) {
+  const { c, accent, onAccent } = useTheme();
+  return (
+    <Pressable onPress={onPress} style={styles.item} hitSlop={4}>
+      <View
+        style={{
+          marginTop: -6,
+          width: 48,
+          height: 34,
+          borderRadius: 12,
+          backgroundColor: accent,
+          alignItems: 'center',
+          justifyContent: 'center',
+          shadowColor: accent,
+          shadowOpacity: 0.45,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 2 },
+        }}
+      >
+        <Ionicons name={live ? 'play' : 'add'} size={live ? 18 : 26} color={onAccent} />
+      </View>
+      <Text style={{ fontFamily: fonts.mono, fontSize: 9, letterSpacing: 1.3, color: live ? accent : c.text, marginTop: 5 }}>
+        {live ? 'LIVE' : 'WORKOUT'}
+      </Text>
+    </Pressable>
   );
 }
 

@@ -93,6 +93,7 @@ export default function RootLayout() {
             <Stack.Screen name="exercise-new" options={sheet} />
             <Stack.Screen name="session/[id]" options={sheet} />
             <Stack.Screen name="stats" options={sheet} />
+            <Stack.Screen name="history" options={sheet} />
             <Stack.Screen name="metric" options={sheet} />
             <Stack.Screen name="settings" options={sheet} />
             <Stack.Screen name="finish/[id]" options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }} />

@@ -50,10 +50,43 @@ const jobs = all.map((e) => {
   const isBack = back > 50;
   const isLower = lower > 50;
   const full = e.group === 'cardio';
-  return { id: e.id, colors, back: isBack, lower: isLower, full };
+  const angle = (isBack ? Math.PI : 0) + (isBack ? -0.35 : 0.35);
+  const [ty, dist] = full ? [0.88, 4.0] : isLower ? [0.62, 2.15] : [1.28, 1.55];
+  return { id: e.id, colors, angle, ty, dist, size: 256 };
 });
 
-// 2. render in Chromium
+// muscle-group filter icons (exercise picker)
+const ICONS = [
+  ['chest', ['chest_upper', 'chest_mid', 'chest_lower'], 'front', 'upper'],
+  ['shoulders', ['delts_front', 'delts_side', 'delts_rear'], 'side', 'upper'],
+  ['biceps', ['biceps'], 'front', 'upper'],
+  ['triceps', ['triceps'], 'back', 'upper'],
+  ['forearms', ['forearms'], 'front', 'arms'],
+  ['traps', ['traps'], 'back', 'upper'],
+  ['upper_back', ['upper_back'], 'back', 'upper'],
+  ['lats', ['lats'], 'back', 'upper'],
+  ['abs', ['abs'], 'front', 'core'],
+  ['obliques', ['obliques'], 'front', 'core'],
+  ['lower_back', ['lower_back'], 'back', 'core'],
+  ['glutes', ['glutes'], 'back', 'lower'],
+  ['quads', ['quads'], 'front', 'lower'],
+  ['hamstrings', ['hamstrings'], 'back', 'lower'],
+  ['adductors', ['adductors'], 'front', 'lower'],
+  ['calves', ['calves'], 'back', 'calf'],
+  ['full', [], 'front', 'full'],
+];
+const FRAME = { upper: [1.3, 1.45], arms: [1.05, 1.7], core: [1.05, 1.45], lower: [0.62, 2.0], calf: [0.42, 1.6], full: [0.88, 4.0] };
+const ANGLE = { front: 0.3, back: Math.PI - 0.3, side: 0.75 };
+const iconJobs = ICONS.map(([id, ms, side, frame]) => ({
+  id,
+  colors: Object.fromEntries(ms.map((m) => [m, 1])),
+  angle: ANGLE[side],
+  ty: FRAME[frame][0],
+  dist: FRAME[frame][1],
+  size: 160,
+}));
+
+// 2. render in Chromium — same faceted look as src/components/Body3D.tsx
 const html = `<!doctype html><html><body style="margin:0;background:transparent">
 <canvas id="c" width="256" height="256"></canvas>
 <script type="importmap">{"imports":{"three":"/three.module.js"}}</script>
@@ -63,54 +96,61 @@ const M = window.MESH;
 const bin = Uint8Array.from(atob(M.data), (c) => c.charCodeAt(0)).buffer;
 let off = 0; const take = (C, n, size) => { const a = new C(bin, off, n); off += size; return a; };
 const V = M.vertexCount, T = M.indexCount;
-const pos = take(Int16Array, V * 3, M.sizes[0]), nor = take(Int8Array, V * 3, M.sizes[1]), lab = take(Uint8Array, V, M.sizes[2]), lab2 = take(Uint8Array, V, M.sizes[3]), bl = take(Uint8Array, V, M.sizes[4]);
+const pos = take(Int16Array, V * 3, M.sizes[0]); take(Int8Array, V * 3, M.sizes[1]); const lab = take(Uint8Array, V, M.sizes[2]); take(Uint8Array, V, M.sizes[3]); take(Uint8Array, V, M.sizes[4]);
 const ind = M.bigIndex ? take(Uint32Array, T, M.sizes[5]) : take(Uint16Array, T, M.sizes[5]);
-const P = new Float32Array(V * 3), N = new Float32Array(V * 3), COL = new Float32Array(V * 3);
-for (let i = 0; i < V; i++) for (let a = 0; a < 3; a++) { P[i*3+a] = M.min[a] + (pos[i*3+a] + 32768) / 65535 * (M.max[a] - M.min[a]); N[i*3+a] = nor[i*3+a] / 127; }
+const P = new Float32Array(V * 3);
+for (let i = 0; i < V; i++) for (let a = 0; a < 3; a++) P[i*3+a] = M.min[a] + (pos[i*3+a] + 32768) / 65535 * (M.max[a] - M.min[a]);
+const F = T / 3, fp = new Float32Array(F * 9), fn = new Float32Array(F * 9), COL = new Float32Array(F * 9), faceLab = new Uint8Array(F);
+const va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3(), n = new THREE.Vector3(), u = new THREE.Vector3(), w = new THREE.Vector3();
+for (let f = 0; f < F; f++) {
+  const a = ind[f*3], b = ind[f*3+1], c = ind[f*3+2];
+  faceLab[f] = lab[b] === lab[c] ? lab[b] : lab[a];
+  va.fromArray(P, a*3); vb.fromArray(P, b*3); vc.fromArray(P, c*3);
+  n.crossVectors(u.subVectors(vb, va), w.subVectors(vc, va)).normalize();
+  [va, vb, vc].forEach((v, k) => { v.toArray(fp, f*9 + k*3); n.toArray(fn, f*9 + k*3); });
+}
 const geo = new THREE.BufferGeometry();
-geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
-geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+geo.setAttribute('position', new THREE.BufferAttribute(fp, 3));
+geo.setAttribute('normal', new THREE.BufferAttribute(fn, 3));
 const colAttr = new THREE.BufferAttribute(COL, 3); geo.setAttribute('color', colAttr);
-geo.setIndex(new THREE.BufferAttribute(ind, 1));
-const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.1 });
-mat.onBeforeCompile = (s) => { s.fragmentShader = s.fragmentShader.replace('#include <dithering_fragment>', \`#include <dithering_fragment>
-  float fres = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
-  gl_FragColor.rgb += fres * vec3(0.14, 0.15, 0.18);\`); };
+const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide });
+mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', \`#include <dithering_fragment>
+  vec3 base = vColor.rgb;
+  float sat = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
+  gl_FragColor.rgb += base * sat * 0.15;
+  float fres = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 2.5);
+  gl_FragColor.rgb += fres * mix(vec3(0.10, 0.11, 0.14), base, sat);
+  if (!gl_FrontFacing) gl_FragColor.rgb = vec3(0.09, 0.09, 0.105);\`); };
 const r = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, alpha: true, preserveDrawingBuffer: true });
 r.setClearColor(0x000000, 0);
-r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.1;
+r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.0;
 const scene = new THREE.Scene();
-scene.add(new THREE.HemisphereLight('#f2eee6', '#141416', 1.0));
-const key = new THREE.DirectionalLight('#ffffff', 2.4); key.position.set(1.5, 2.5, 3); scene.add(key);
-const fill = new THREE.DirectionalLight('#bcc8ff', 0.7); fill.position.set(-2.5, 0.8, 1.5); scene.add(fill);
-const rim = new THREE.DirectionalLight('#ffffff', 2.0); rim.position.set(-0.5, 1.8, -3); scene.add(rim);
+scene.add(new THREE.HemisphereLight('#e8ecf5', '#101014', 0.9));
+const key = new THREE.DirectionalLight('#ffffff', 2.6); key.position.set(1.2, 2.2, 3); scene.add(key);
+const rim = new THREE.DirectionalLight('#9fb4ff', 1.6); rim.position.set(-1.5, 1.5, -2.5); scene.add(rim);
 const mesh = new THREE.Mesh(geo, mat); scene.add(mesh);
 const cam = new THREE.PerspectiveCamera(28, 1, 0.05, 20);
-const ACC = new THREE.Color('#C9F03F'), IDLE = new THREE.Color('#4c4c55'), SKIN = new THREE.Color('#26262b'), UNDER = new THREE.Color('#121215');
-const c1 = new THREE.Color(), c2 = new THREE.Color();
-function colOf(l, colors, out) {
-  if (l === 255) return out.copy(SKIN);
-  if (l === 254) return out.copy(UNDER);
-  if (l === 253) return out.copy(IDLE);
-  const k = colors[M.muscles[l]] || 0;
-  return out.copy(IDLE).lerp(ACC, k);
-}
+const ACC = new THREE.Color('#C9F03F'), IDLE = new THREE.Color('#6A6A75'), SKIN = new THREE.Color('#55555F');
+const c1 = new THREE.Color();
 window.renderJob = (job) => {
-  for (let i = 0; i < V; i++) { colOf(lab[i], job.colors, c1); colOf(lab2[i], job.colors, c2); c1.lerp(c2, bl[i] / 255 * 0.5); COL[i*3] = c1.r; COL[i*3+1] = c1.g; COL[i*3+2] = c1.b; }
+  const cv = document.getElementById('c');
+  if (cv.width !== job.size) { cv.width = cv.height = job.size; r.setSize(job.size, job.size, false); }
+  for (let f = 0; f < F; f++) {
+    const l = faceLab[f];
+    if (l >= 254) c1.copy(SKIN); else if (l === 253 || l >= M.muscles.length) c1.copy(IDLE); else c1.copy(IDLE).lerp(ACC, job.colors[M.muscles[l]] || 0);
+    for (let k = 0; k < 9; k += 3) { COL[f*9+k] = c1.r; COL[f*9+k+1] = c1.g; COL[f*9+k+2] = c1.b; }
+  }
   colAttr.needsUpdate = true;
-  const ang = (job.back ? Math.PI : 0) + (job.back ? -0.35 : 0.35);
-  mesh.rotation.y = ang;
-  let ty, dist;
-  if (job.full) { ty = 0.88; dist = 4.0; } else if (job.lower) { ty = 0.62; dist = 2.15; } else { ty = 1.28; dist = 1.55; }
-  cam.position.set(0, ty + 0.04, dist); cam.lookAt(0, ty, 0);
+  mesh.rotation.y = job.angle;
+  cam.position.set(0, job.ty + 0.04, job.dist); cam.lookAt(0, job.ty, 0);
   r.render(scene, cam);
-  return document.getElementById('c').toDataURL('image/webp', 0.86);
+  return cv.toDataURL('image/webp', 0.86);
 };
 document.title = 'ready';
 </script></body></html>`;
 
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
-const page = await browser.newPage({ viewport: { width: 256, height: 256 } });
+const page = await browser.newPage({ viewport: { width: 512, height: 512 } });
 page.on('pageerror', (e) => console.log('page error', e.message));
 page.on('console', (m) => m.type() === 'error' && console.log('console', m.text().slice(0, 300)));
 page.on('requestfailed', (r) => console.log('failed', r.url()));
@@ -133,6 +173,22 @@ for (const job of jobs) {
   bytes += buf.length;
   fs.writeFileSync(path.join(OUT, `${job.id}.webp`), buf);
 }
+const ICON_OUT = path.join(ROOT, 'assets/muscles');
+fs.mkdirSync(ICON_OUT, { recursive: true });
+for (const job of iconJobs) {
+  const url = await page.evaluate((j) => window.renderJob(j), job);
+  fs.writeFileSync(path.join(ICON_OUT, `${job.id}.webp`), Buffer.from(url.split(',')[1], 'base64'));
+}
+fs.writeFileSync(
+  path.join(ROOT, 'src/data/muscleIcons.ts'),
+  [
+    '// AUTO-GENERATED by scripts/body/render_exercises.mjs — muscle-group icons for the exercise filter.',
+    'export const MUSCLE_ICONS: Record<string, number> = {',
+    ...iconJobs.map((j) => `  ${j.id}: require('../../assets/muscles/${j.id}.webp'),`),
+    '};',
+    '',
+  ].join('\n'),
+);
 await browser.close();
 
 const lines = [

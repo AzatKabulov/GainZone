@@ -5,6 +5,7 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { LineChart } from '@/components/charts';
 import { Stat } from '@/components/kit';
+import { BUILD } from '@/lib/build';
 import { Button, Card, IconBtn, Press, Screen, ScreenTitle, Section, TAB_BAR_SPACE, Txt } from '@/components/ui';
 import { getExercise, useExName } from '@/lib/exercise';
 import { bmi, metricsSorted, useProfile } from '@/lib/profile';
@@ -152,6 +153,9 @@ export default function ProfileScreen() {
         ) : null}
 
         <Button label="FULL STATISTICS" icon="stats-chart" variant="outline" onPress={() => router.push('/stats')} style={{ marginTop: 22 }} />
+        <Txt variant="label" color={c.textFaint} style={{ textAlign: 'center', marginTop: 18, fontSize: 9 }}>
+          GAINZONE · BUILD {BUILD}
+        </Txt>
       </ScrollView>
     </Screen>
   );

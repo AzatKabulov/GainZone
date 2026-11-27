@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 
-import { HeaderBar } from '@/components/HeaderBar';
+import { ActivityCalendar, RecoveryStrip } from '@/components/ActivityCalendar';
 import { Button, Empty, IconBtn, Press, Screen, ScreenTitle, Section, TAB_BAR_SPACE, Txt } from '@/components/ui';
 import { ExerciseThumb } from '@/components/kit';
-import { addDays, dateKey, diffDays, relativeLabel, startOfWeek, todayKey } from '@/lib/date';
+import { dateKey, diffDays, relativeLabel, todayKey } from '@/lib/date';
 import { getExercise, useExName } from '@/lib/exercise';
 import { haptic } from '@/lib/haptics';
 import { confirm, openMenu } from '@/lib/menu';
@@ -18,7 +18,7 @@ import { useActive } from '@/store/active';
 import { useData, type Template } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { useSettings } from '@/store/settings';
-import { alpha, fonts, useTheme } from '@/theme';
+import { alpha, useTheme } from '@/theme';
 
 export default function TrainScreen() {
   const { c, accent } = useTheme();
@@ -33,8 +33,6 @@ export default function TrainScreen() {
     [templates],
   );
   const history = useMemo(() => finishedWorkouts(workouts), [workouts]);
-  const weekStart = startOfWeek(todayKey());
-  const thisWeek = history.filter((w) => dateKey(new Date(w.started_at)) >= weekStart);
   const goal = profile?.weekly_goal ?? 4;
 
   const begin = (templateId: string | null) => {
@@ -59,13 +57,8 @@ export default function TrainScreen() {
             </>
           }
         />
-        <HeaderBar
-          label="THIS WEEK"
-          detail={`${thisWeek.length} of ${goal} workouts · ${fmtVolume(thisWeek.reduce((a, w) => a + w.volume, 0))} kg`}
-          value={Math.min(1, thisWeek.length / Math.max(1, goal))}
-        />
-
-        <WeekStrip doneDays={new Set(thisWeek.map((w) => dateKey(new Date(w.started_at))))} />
+        <ActivityCalendar list={history} goal={goal} />
+        <RecoveryStrip list={history} />
 
         {live ? (
           <Animated.View entering={FadeInDown.duration(380)}>
@@ -143,41 +136,6 @@ export default function TrainScreen() {
         ) : null}
       </ScrollView>
     </Screen>
-  );
-}
-
-function WeekStrip({ doneDays }: { doneDays: Set<string> }) {
-  const { c, accent, onAccent } = useTheme();
-  const start = startOfWeek(todayKey());
-  const today = todayKey();
-  return (
-    <View style={{ flexDirection: 'row', gap: 6 }}>
-      {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => {
-        const key = addDays(start, i);
-        const done = doneDays.has(key);
-        const isToday = key === today;
-        const future = key > today;
-        return (
-          <View
-            key={i}
-            style={{
-              flex: 1,
-              height: 46,
-              borderRadius: 10,
-              backgroundColor: done ? accent : c.surface,
-              borderWidth: isToday && !done ? 1.5 : 1,
-              borderColor: isToday && !done ? accent : done ? accent : c.border,
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: future ? 0.35 : 1,
-            }}
-          >
-            <Text style={{ fontFamily: fonts.mono, fontSize: 9, letterSpacing: 1.2, color: done ? onAccent : c.textDim }}>{d}</Text>
-            {done ? <Ionicons name="checkmark-sharp" size={14} color={onAccent} /> : <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: c.textFaint }}>·</Text>}
-          </View>
-        );
-      })}
-    </View>
   );
 }
 
