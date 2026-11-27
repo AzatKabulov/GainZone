@@ -13,6 +13,7 @@ import { exerciseTotals, FEELINGS, finishedWorkouts, fmtKg, fmtVolume, muscleSta
 import { useNow } from '@/lib/useNow';
 import { useData } from '@/store/data';
 import { fonts, useTheme } from '@/theme';
+import { goBack } from '@/lib/nav';
 
 type WeekMetric = 'volume' | 'workouts' | 'sets' | 'minutes';
 
@@ -64,7 +65,7 @@ export default function StatsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bgElevated }}>
-      <SheetHeader kicker="ANALYTICS" title="STATISTICS" onClose={() => router.back()} />
+      <SheetHeader kicker="ANALYTICS" title="STATISTICS" onClose={() => goBack()} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 30 }}>
         {list.length === 0 ? (
           <Empty icon="stats-chart-outline" title="NO DATA YET" text="Finish your first workout — charts build themselves from your log." />

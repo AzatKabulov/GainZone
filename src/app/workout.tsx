@@ -16,15 +16,17 @@ import { MUSCLE_IDS, type MuscleId } from '@/data/muscles';
 import { exName, getExercise } from '@/lib/exercise';
 import { Button, Empty, Press, Txt } from '@/components/ui';
 import { haptic } from '@/lib/haptics';
-import { confirm } from '@/lib/menu';
+import { confirm, openMenu } from '@/lib/menu';
 import { setPickHandler } from '@/lib/pick';
 import { ensureNotificationPermission, startRest } from '@/lib/rest';
-import { addExerciseToMuscles, emptyMuscleStats, fmtElapsed, fmtVolume, workoutTotals } from '@/lib/stats';
+import { addExerciseToMuscles, emptyMuscleStats, fmtDur, fmtElapsed, fmtVolume, workoutTotals } from '@/lib/stats';
+import { supersetInfo } from '@/lib/superset';
 import { useNow } from '@/lib/useNow';
-import { addExercises, discardWorkout, finishCheck, finishWorkout, renameWorkout, setExerciseRest, setLiveDuration } from '@/lib/workout';
+import { addExercises, completeFilledSets, discardWorkout, filledUnticked, finishCheck, finishWorkout, renameWorkout, setExerciseRest, setLiveDuration } from '@/lib/workout';
 import { useActive } from '@/store/active';
 import { useFx } from '@/store/fx';
 import { fonts, useTheme } from '@/theme';
+import { goBack } from '@/lib/nav';
 
 /** The live workout — its own full page. Back = minimise (the workout keeps running). */
 export default function WorkoutScreen() {
@@ -52,11 +54,15 @@ export default function WorkoutScreen() {
     return out;
   }, [workedKey, accent, palette.idle]);
 
+  // superset look per exercise; keyed by the group ids so blocks keep their memo while the clock ticks
+  const superKey = (w?.exercises ?? []).map((e) => e.superset ?? '').join('|');
+  const supers = useMemo(() => supersetInfo(superKey.split('|').map((x) => ({ superset: x || null }))), [superKey]);
+
   useEffect(() => {
     void ensureNotificationPermission();
   }, []);
 
-  const back = () => (router.canGoBack() ? router.back() : router.replace('/'));
+  const back = goBack;
 
   if (!w) {
     return (
@@ -76,7 +82,8 @@ export default function WorkoutScreen() {
 
   const finish = () => {
     const chk = finishCheck();
-    if (chk.doneSets === 0) {
+    const typed = filledUnticked();
+    if (chk.doneSets === 0 && typed === 0) {
       confirm('Nothing logged yet', 'Tick at least one set to save the workout.', 'Discard workout', () => {
         discardWorkout();
         back();
@@ -90,8 +97,12 @@ export default function WorkoutScreen() {
       useFx.getState().celebrate({ kind: 'workout', kicker: 'WORKOUT LOGGED', title: 'DONE.' });
       router.replace(`/finish/${id}`);
     };
-    if (chk.unfinished > 0) confirm('Finish workout?', `${chk.unfinished} unticked set${chk.unfinished > 1 ? 's' : ''} will be dropped.`, 'Finish', go, false);
-    else go();
+    if (chk.unfinished === 0) return go();
+    const pl = (n: number) => `${n} set${n > 1 ? 's' : ''}`;
+    openMenu(`${pl(chk.unfinished)} not ticked`, [
+      ...(typed ? [{ label: `Tick ${pl(typed)} with numbers & finish`, onPress: () => (completeFilledSets(), go()) }] : []),
+      ...(chk.doneSets ? [{ label: `Finish — drop unticked sets`, destructive: !typed, onPress: go }] : []),
+    ]);
   };
 
   const discard = () =>
@@ -147,10 +158,34 @@ export default function WorkoutScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: insets.bottom + (rest ? 120 : 40) }}
       >
-        {w.exercises.length === 0 ? <Empty icon="add-circle-outline" title="EMPTY WORKOUT" /> : null}
+        {elapsed > 3 * 3600 ? (
+          <View style={{ margin: 16, marginBottom: 0, padding: 14, borderRadius: 14, backgroundColor: c.surface, borderWidth: 1, borderColor: '#F59E0B66', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Ionicons name="hourglass-outline" size={22} color="#F59E0B" />
+            <View style={{ flex: 1 }}>
+              <Txt variant="title">Running for {fmtDur(elapsed)}</Txt>
+              <Txt variant="small" color={c.textDim}>
+                Forgot to finish? Set the real duration first.
+              </Txt>
+            </View>
+            <Button label="FIX" small variant="outline" onPress={() => setDurOpen(true)} />
+          </View>
+        ) : null}
+        {w.exercises.length === 0 ? (
+          <Empty icon="add-circle-outline" title="EMPTY WORKOUT" text="Add exercises — tick each set as you finish it and the rest timer starts on its own." />
+        ) : null}
         {w.exercises.map((we, i) => (
           <Animated.View key={we.id} entering={FadeInDown.delay(Math.min(i, 6) * 50).duration(360)} layout={LinearTransition.springify().damping(18)}>
-            <ExerciseBlock we={we} workoutId={w.id} templateId={w.template_id} index={i} count={w.exercises.length} onNote={setNoteFor} onRest={setRestFor} />
+            <ExerciseBlock
+              we={we}
+              workoutId={w.id}
+              templateId={w.template_id}
+              index={i}
+              count={w.exercises.length}
+              onNote={setNoteFor}
+              onRest={setRestFor}
+              superset={supers[i]}
+              canLinkNext={i < w.exercises.length - 1 && !(we.superset && w.exercises[i + 1].superset === we.superset)}
+            />
           </Animated.View>
         ))}
 

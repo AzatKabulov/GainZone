@@ -70,6 +70,28 @@ export interface Session {
   we: WorkoutExercise;
 }
 
+/**
+ * Double progression: if every working set last time reached the target reps at the same top weight,
+ * suggest the next weight step (2 kg for dumbbells, 2.5 kg otherwise).
+ */
+export function progressionHint(
+  last: Session | null,
+  ex: { type: LogType; equip: string },
+  targetReps: number,
+): { weight: number; from: number; sets: number; reps: number } | null {
+  if (!last || ex.type !== 'weight_reps') return null;
+  const work = last.we.sets.filter(isWorking);
+  if (work.length < 2) return null;
+  const top = Math.max(...work.map((s) => s.weight ?? 0));
+  if (!top) return null;
+  const atTop = work.filter((s) => (s.weight ?? 0) === top);
+  if (atTop.length < 2) return null;
+  const minReps = Math.min(...atTop.map((s) => Math.min(s.reps ?? 0, s.reps_r ?? s.reps ?? 0)));
+  if (minReps < targetReps) return null;
+  const step = ex.equip === 'dumbbell' ? 2 : 2.5;
+  return { weight: Math.round((top + step) * 100) / 100, from: top, sets: atTop.length, reps: minReps };
+}
+
 /** Every session of one exercise, newest first. */
 export function exerciseSessions(list: Workout[], exerciseId: string, excludeWorkoutId?: string): Session[] {
   const out: Session[] = [];

@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +13,7 @@ import { fmtKg } from '@/lib/stats';
 import { useData } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { useTheme } from '@/theme';
+import { goBack } from '@/lib/nav';
 
 export default function MetricScreen() {
   const { c } = useTheme();
@@ -39,12 +39,12 @@ export default function MetricScreen() {
     else useData.getState().create('metrics', patch);
     haptic.success();
     useFx.getState().info('LOGGED', `${patch.weight ? `${fmtKg(patch.weight)} kg` : 'Measurements'} · ${relativeLabel(date).toLowerCase()}`);
-    router.back();
+    goBack();
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bgElevated }}>
-      <SheetHeader kicker="BODY" title="LOG WEIGHT" onClose={() => router.back()} />
+      <SheetHeader kicker="BODY" title="LOG WEIGHT" onClose={() => goBack()} />
       <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 30 }}>
         <FieldLabel>DAY</FieldLabel>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

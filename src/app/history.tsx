@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { ScrollView, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -11,6 +10,7 @@ import { dateKey, monthLong } from '@/lib/date';
 import { finishedWorkouts, fmtVolume, weekStreak } from '@/lib/stats';
 import { useData, type Workout } from '@/store/data';
 import { useTheme } from '@/theme';
+import { goBack } from '@/lib/nav';
 
 /** Every finished workout, newest first, grouped by month. */
 export default function HistoryScreen() {
@@ -30,7 +30,7 @@ export default function HistoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bgElevated }}>
-      <SheetHeader kicker={`${list.length} WORKOUTS`} title="LOG" onClose={() => router.back()} />
+      <SheetHeader kicker={`${list.length} WORKOUTS`} title="LOG" onClose={() => goBack()} />
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 30 }} showsVerticalScrollIndicator={false}>
         <Card style={{ flexDirection: 'row' }}>
           <Stat label="WORKOUTS" value={String(list.length)} />

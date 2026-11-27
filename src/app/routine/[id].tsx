@@ -15,11 +15,12 @@ import { haptic } from '@/lib/haptics';
 import { confirm, openMenu } from '@/lib/menu';
 import { setPickHandler } from '@/lib/pick';
 import { fmtKg } from '@/lib/stats';
-import { startWorkout } from '@/lib/workout';
-import { useActive } from '@/store/active';
+import { linkWithNext, normalizeSupersets, supersetInfo, unlink, type SupersetInfo } from '@/lib/superset';
+import { startOrAsk, startWorkout } from '@/lib/workout';
 import { useData, uuid, type TemplateExercise, type TemplateSet } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { alpha, fonts, useTheme } from '@/theme';
+import { goBack } from '@/lib/nav';
 
 export default function RoutineEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,6 +29,7 @@ export default function RoutineEditor() {
   const existing = useData((s) => (id && id !== 'new' ? s.templates[id] : undefined));
   const [name, setName] = useState(existing?.name ?? '');
   const [items, setItems] = useState<TemplateExercise[]>(existing?.exercises ?? []);
+  const supers = supersetInfo(items);
   const isNew = !existing;
 
   const patchItem = (iid: string, fn: (t: TemplateExercise) => TemplateExercise) => setItems((l) => l.map((t) => (t.id === iid ? fn(t) : t)));
@@ -62,10 +64,10 @@ export default function RoutineEditor() {
     haptic.success();
     useFx.getState().info(isNew ? 'ROUTINE CREATED' : 'ROUTINE SAVED', clean);
     if (thenStart && tid) {
-      if (!useActive.getState().workout) startWorkout(tid);
+      const id = tid;
       router.dismissAll();
-      router.push('/workout');
-    } else router.back();
+      startOrAsk(() => startWorkout(id));
+    } else goBack();
   };
 
   const del = () =>
@@ -74,12 +76,12 @@ export default function RoutineEditor() {
       useData.getState().remove('templates', existing.id);
       haptic.warning();
       useFx.getState().info('ROUTINE DELETED', existing.name, { icon: 'undo', onPress: () => useData.getState().restore('templates', existing.id) });
-      router.back();
+      goBack();
     });
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bgElevated }}>
-      <SheetHeader kicker={isNew ? 'NEW' : 'EDIT'} title="ROUTINE" onClose={() => router.back()} />
+      <SheetHeader kicker={isNew ? 'NEW' : 'EDIT'} title="ROUTINE" onClose={() => goBack()} />
       <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 30 }}>
         <FieldLabel>NAME</FieldLabel>
         <Input value={name} onChangeText={setName} placeholder="Chest + Back" autoFocus={isNew} />
@@ -102,15 +104,18 @@ export default function RoutineEditor() {
               t={t}
               first={i === 0}
               last={i === items.length - 1}
+              superset={supers[i]}
+              canLinkNext={i < items.length - 1 && !(t.superset && items[i + 1].superset === t.superset)}
+              onSuperset={(join) => setItems((l) => (join ? linkWithNext(l, i) : unlink(l, i)))}
               onChange={(fn) => patchItem(t.id, fn)}
               onMove={(dir) =>
                 setItems((l) => {
                   const n = [...l];
                   [n[i], n[i + dir]] = [n[i + dir], n[i]];
-                  return n;
+                  return normalizeSupersets(n);
                 })
               }
-              onRemove={() => setItems((l) => l.filter((x) => x.id !== t.id))}
+              onRemove={() => setItems((l) => normalizeSupersets(l.filter((x) => x.id !== t.id)))}
             />
           </Animated.View>
         ))}
@@ -135,6 +140,9 @@ function RoutineExercise({
   t,
   first,
   last,
+  superset,
+  canLinkNext,
+  onSuperset,
   onChange,
   onMove,
   onRemove,
@@ -142,6 +150,9 @@ function RoutineExercise({
   t: TemplateExercise;
   first: boolean;
   last: boolean;
+  superset: SupersetInfo | null;
+  canLinkNext: boolean;
+  onSuperset: (join: boolean) => void;
   onChange: (fn: (t: TemplateExercise) => TemplateExercise) => void;
   onMove: (dir: -1 | 1) => void;
   onRemove: () => void;
@@ -158,6 +169,8 @@ function RoutineExercise({
   const menu = () =>
     openMenu(exName(ex), [
       ...(canSplit ? [{ label: split ? 'One reps field' : 'Left / right reps', onPress: () => onChange((x) => ({ ...x, split: !split })) }] : []),
+      ...(canLinkNext ? [{ label: 'Superset with next exercise', onPress: () => onSuperset(true) }] : []),
+      ...(superset ? [{ label: 'Remove from superset', onPress: () => onSuperset(false) }] : []),
       ...(!first ? [{ label: 'Move up', onPress: () => onMove(-1) }] : []),
       ...(!last ? [{ label: 'Move down', onPress: () => onMove(1) }] : []),
       {
@@ -172,12 +185,19 @@ function RoutineExercise({
 
   let n = 0;
   return (
-    <View style={{ marginTop: 12, padding: 14, borderRadius: 18, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
+    <View style={{ marginTop: superset && !superset.first ? 6 : 12, padding: 14, borderRadius: 18, backgroundColor: c.surface, borderWidth: 1, borderColor: superset ? superset.color + '88' : c.border, borderLeftWidth: superset ? 4 : 1 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <ExerciseThumb ex={ex} size={40} />
-        <Txt variant="title" style={{ flex: 1 }} numberOfLines={2}>
-          {exName(ex)}
-        </Txt>
+        <View style={{ flex: 1 }}>
+          <Txt variant="title" numberOfLines={2}>
+            {exName(ex)}
+          </Txt>
+          {superset ? (
+            <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1.4, color: superset.color, marginTop: 2 }}>
+              SUPERSET {superset.letter}
+            </Text>
+          ) : null}
+        </View>
         <Press hitSlop={6} scaleTo={0.9} onPress={menu} style={{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: c.surface2 }}>
           <Ionicons name="ellipsis-horizontal" size={18} color={c.text} />
         </Press>

@@ -10,6 +10,7 @@ import { Button, IconBtn } from '@/components/ui';
 import { haptic } from '@/lib/haptics';
 import { deliverPick, pickOptions } from '@/lib/pick';
 import { useTheme } from '@/theme';
+import { goBack } from '@/lib/nav';
 
 export default function PickScreen() {
   const { c } = useTheme();
@@ -20,7 +21,7 @@ export default function PickScreen() {
   const done = (ids: string[]) => {
     deliverPick(ids);
     haptic.success();
-    router.back();
+    goBack();
   };
 
   return (
@@ -28,7 +29,7 @@ export default function PickScreen() {
       <SheetHeader
         kicker="LIBRARY"
         title={opts.title}
-        onClose={() => router.back()}
+        onClose={() => goBack()}
         right={<IconBtn icon="add" size={36} onPress={() => router.push('/exercise-new')} />}
       />
       <ExerciseList

@@ -13,15 +13,15 @@ import { haptic } from '@/lib/haptics';
 import { confirm, openMenu } from '@/lib/menu';
 import { addStarter, STARTERS } from '@/lib/starters';
 import { finishedWorkouts, fmtDur, fmtVolume } from '@/lib/stats';
-import { duplicateTemplate, startWorkout } from '@/lib/workout';
+import { duplicateTemplate, startOrAsk, startWorkout } from '@/lib/workout';
 import { useActive } from '@/store/active';
 import { useData, type Template } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { useSettings } from '@/store/settings';
-import { alpha, useTheme } from '@/theme';
+import { useTheme } from '@/theme';
 
 export default function TrainScreen() {
-  const { c, accent } = useTheme();
+  const { c } = useTheme();
   const templates = useData((s) => s.templates);
   const workouts = useData((s) => s.workouts);
   const profile = useData((s) => Object.values(s.profile).find((p) => !p.deleted));
@@ -33,16 +33,14 @@ export default function TrainScreen() {
     [templates],
   );
   const history = useMemo(() => finishedWorkouts(workouts), [workouts]);
+  // rotation: the routine you haven't done for the longest (never-done ones first)
+  const nextId =
+    list.length >= 2 && !live
+      ? [...list].sort((a, b) => (a.last_used_at ?? '').localeCompare(b.last_used_at ?? '') || a.sort_order - b.sort_order)[0]?.id
+      : null;
   const goal = profile?.weekly_goal ?? 4;
 
-  const begin = (templateId: string | null) => {
-    if (live) {
-      router.push('/workout');
-      return;
-    }
-    startWorkout(templateId);
-    router.push('/workout');
-  };
+  const begin = (templateId: string | null) => startOrAsk(() => startWorkout(templateId));
 
   return (
     <Screen>
@@ -60,34 +58,7 @@ export default function TrainScreen() {
         <ActivityCalendar list={history} goal={goal} />
         <RecoveryStrip list={history} />
 
-        {live ? (
-          <Animated.View entering={FadeInDown.duration(380)}>
-            <Press
-              scaleTo={0.985}
-              onPress={() => router.push('/workout')}
-              style={{
-                marginTop: 18,
-                padding: 16,
-                borderRadius: 16,
-                backgroundColor: alpha(accent, 0.1),
-                borderWidth: 1,
-                borderColor: alpha(accent, 0.55),
-              }}
-            >
-              <Txt variant="label" color={accent}>
-                NOW · IN PROGRESS
-              </Txt>
-              <Txt variant="h2" style={{ marginTop: 6 }}>
-                {live.name.toUpperCase()}
-              </Txt>
-              <Txt variant="mono" color={c.textDim} style={{ marginTop: 4 }}>
-                {live.exercises.length} EXERCISES · {live.exercises.reduce((a, e) => a + e.sets.filter((s) => s.done).length, 0)} SETS DONE
-              </Txt>
-            </Press>
-          </Animated.View>
-        ) : (
-          <Button label="START EMPTY WORKOUT" icon="flash" onPress={() => begin(null)} style={{ marginTop: 18 }} />
-        )}
+        {!live ? <Button label="START EMPTY WORKOUT" icon="flash" onPress={() => begin(null)} style={{ marginTop: 18 }} /> : null}
 
         <Section label="ROUTINES" count={list.length} action="+ NEW" onAction={() => router.push('/routine/new')} style={{ marginTop: 26, marginBottom: 12 }} />
 
@@ -97,7 +68,7 @@ export default function TrainScreen() {
           <View style={{ gap: 10 }}>
             {list.map((t, i) => (
               <Animated.View key={t.id} entering={FadeInDown.delay(i * 50).duration(380)} layout={LinearTransition.springify().damping(18)}>
-                <RoutineCard t={t} onStart={() => begin(t.id)} />
+                <RoutineCard t={t} next={t.id === nextId} onStart={() => begin(t.id)} />
               </Animated.View>
             ))}
           </View>
@@ -139,8 +110,8 @@ export default function TrainScreen() {
   );
 }
 
-function RoutineCard({ t, onStart }: { t: Template; onStart: () => void }) {
-  const { c } = useTheme();
+function RoutineCard({ t, next, onStart }: { t: Template; next?: boolean; onStart: () => void }) {
+  const { c, accent } = useTheme();
   const exName = useExName();
   const sets = t.exercises.reduce((a, e) => a + e.sets.length, 0);
   const lastDays = t.last_used_at ? diffDays(dateKey(new Date(t.last_used_at)), todayKey()) : null;
@@ -160,7 +131,12 @@ function RoutineCard({ t, onStart }: { t: Template; onStart: () => void }) {
       },
     ]);
   return (
-    <Press scaleTo={0.985} onPress={() => router.push(`/routine/${t.id}`)} onLongPress={menu} style={{ padding: 16, borderRadius: 16, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border }}>
+    <Press scaleTo={0.985} onPress={() => router.push(`/routine/${t.id}`)} onLongPress={menu} style={{ padding: 16, borderRadius: 16, backgroundColor: c.surface, borderWidth: 1, borderColor: next ? accent : c.border }}>
+      {next ? (
+        <Txt variant="label" color={accent} style={{ marginBottom: 6 }}>
+          UP NEXT
+        </Txt>
+      ) : null}
       <View style={{ flexDirection: 'row', gap: 14 }}>
         <View style={{ flex: 1 }}>
           <Txt variant="h2" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>

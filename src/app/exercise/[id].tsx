@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -20,6 +20,7 @@ import { bestSet, e1rm, exerciseRecords, exerciseSessions, finishedWorkouts, fmt
 import { useData } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { alpha, fonts, useTheme } from '@/theme';
+import { goBack } from '@/lib/nav';
 
 type Metric = 'e1rm' | 'weight' | 'volume' | 'reps';
 
@@ -67,7 +68,7 @@ export default function ExerciseScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bgElevated }}>
-      <SheetHeader kicker={`${GROUP_NAME[ex.group].toUpperCase()} · ${EQUIP_NAME[ex.equip].toUpperCase()}`} title={exName(ex).toUpperCase()} onClose={() => router.back()} />
+      <SheetHeader kicker={`${GROUP_NAME[ex.group].toUpperCase()} · ${EQUIP_NAME[ex.equip].toUpperCase()}`} title={exName(ex).toUpperCase()} onClose={() => goBack()} />
       <ScrollView scrollEnabled={scrollOn} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 30 }}>
         {illu ? (
           <View style={{ aspectRatio: 1, maxHeight: 360, alignSelf: 'center', width: '100%', borderRadius: 20, overflow: 'hidden', backgroundColor: '#F2EEE6', marginBottom: 12 }}>
@@ -197,7 +198,7 @@ export default function ExerciseScreen() {
                   useData.getState().remove('exercises', ex.id);
                   haptic.warning();
                   useFx.getState().info('EXERCISE DELETED', exName(ex), { icon: 'undo', onPress: () => useData.getState().restore('exercises', ex.id) });
-                  router.back();
+                  goBack();
                 })
               }
             >

@@ -9,8 +9,9 @@ import { LOG_COLS, exName, useExercise } from '@/lib/exercise';
 import { haptic } from '@/lib/haptics';
 import { openMenu } from '@/lib/menu';
 import { setPickHandler } from '@/lib/pick';
-import { exerciseSessions, finishedWorkouts, fmtKg, fmtReps, previousForSets, recentNotes } from '@/lib/stats';
-import { addSet, moveExercise, pinnedNote, removeExercise, removeSet, replaceExercise, setSplit, toggleSet, updateSet } from '@/lib/workout';
+import { exerciseSessions, finishedWorkouts, fmtKg, fmtReps, previousForSets, progressionHint, recentNotes } from '@/lib/stats';
+import type { SupersetInfo } from '@/lib/superset';
+import { addSet, moveExercise, pinnedNote, removeExercise, removeSet, replaceExercise, setSplit, setSuperset, toggleSet, updateSet } from '@/lib/workout';
 import { useData, type SetEntry, type WorkoutExercise } from '@/store/data';
 import { alpha, fonts, useTheme } from '@/theme';
 import { fmtRestLong } from './RestSheet';
@@ -34,6 +35,8 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   count,
   onNote,
   onRest,
+  superset = null,
+  canLinkNext = false,
 }: {
   we: WorkoutExercise;
   workoutId: string;
@@ -42,6 +45,10 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   count: number;
   onNote: (weId: string) => void;
   onRest: (weId: string) => void;
+  /** superset look (colour bar + label), null when not in one */
+  superset?: SupersetInfo | null;
+  /** the exercise below can be joined into a superset with this one */
+  canLinkNext?: boolean;
 }) {
   const { c, accent } = useTheme();
   const ex = useExercise(we.exercise_id);
@@ -67,6 +74,8 @@ export const ExerciseBlock = memo(function ExerciseBlock({
           router.push('/pick');
         },
       },
+      ...(canLinkNext ? [{ label: 'Superset with next exercise', onPress: () => setSuperset(we.id, true) }] : []),
+      ...(superset ? [{ label: 'Remove from superset', onPress: () => setSuperset(we.id, false) }] : []),
       ...(index > 0 ? [{ label: 'Move up', onPress: () => moveExercise(we.id, -1) }] : []),
       ...(index < count - 1 ? [{ label: 'Move down', onPress: () => moveExercise(we.id, 1) }] : []),
       { label: 'Remove exercise', destructive: true, onPress: () => removeExercise(we.id) },
@@ -74,8 +83,25 @@ export const ExerciseBlock = memo(function ExerciseBlock({
 
   const noteLine = we.note || pinned || lastNote?.text;
 
+  // progression hint: target = the routine's planned reps (first working set), else 10
+  const planned = templateId ? useData.getState().templates[templateId]?.exercises.find((e) => e.exercise_id === we.exercise_id)?.sets.find((x) => x.type !== 'warmup')?.reps : null;
+  const hint = progressionHint(sessions[0] ?? null, ex, planned || 10);
+  const open = we.sets.filter((x) => !x.done && x.type !== 'warmup');
+  const showHint = !!hint && !we.sets.some((x) => x.done) && open.some((x) => (x.weight ?? 0) < hint.weight);
+  const applyHint = () => {
+    if (!hint) return;
+    haptic.tap();
+    for (const x of open) updateSet(we.id, x.id, { weight: hint.weight });
+  };
+
   return (
-    <View style={{ paddingTop: 22, paddingBottom: 6 }}>
+    <View style={{ paddingTop: superset && !superset.first ? 12 : 22, paddingBottom: 6 }}>
+      {superset ? (
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', left: 4, width: 3, borderRadius: 2, top: superset.first ? 22 : 0, bottom: superset.last ? 6 : 0, backgroundColor: superset.color }}
+        />
+      ) : null}
       {/* header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 }}>
         <Press scaleTo={0.94} onPress={() => router.push(`/exercise/${ex.id}`)}>
@@ -85,6 +111,12 @@ export const ExerciseBlock = memo(function ExerciseBlock({
           <Text numberOfLines={2} style={{ fontFamily: fonts.semibold, fontSize: 18, lineHeight: 23, color: accent }}>
             {exName(ex)}
           </Text>
+          {superset ? (
+            <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1.4, color: superset.color, marginTop: 2 }}>
+              SUPERSET {superset.letter}
+              {superset.last ? ' · REST AFTER THIS' : ' · NO REST, GO NEXT'}
+            </Text>
+          ) : null}
         </Press>
         <Press hitSlop={8} onPress={menu} scaleTo={0.9} style={{ width: 36, height: 40, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="ellipsis-vertical" size={20} color={c.text} />
@@ -104,6 +136,23 @@ export const ExerciseBlock = memo(function ExerciseBlock({
           <Text numberOfLines={1} style={{ flex: 1, fontFamily: fonts.body, fontSize: 13.5, color: we.note ? c.text : c.textDim }}>
             {noteLine}
           </Text>
+        </Press>
+      ) : null}
+
+      {showHint && hint ? (
+        <Press
+          onPress={applyHint}
+          scaleTo={0.98}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: alpha(accent, 0.1), borderWidth: 1, borderColor: alpha(accent, 0.4) }}
+        >
+          <Ionicons name="trending-up" size={18} color={accent} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: fonts.semibold, fontSize: 14.5, color: c.text }}>Go up to {fmtKg(hint.weight)} kg</Text>
+            <Text style={{ fontFamily: fonts.body, fontSize: 12.5, color: c.textDim, marginTop: 1 }}>
+              Last time {hint.sets}×{hint.reps}+ at {fmtKg(hint.from)} kg
+            </Text>
+          </View>
+          <Text style={{ fontFamily: fonts.display, fontSize: 16, letterSpacing: 1.2, color: accent, marginTop: 2 }}>APPLY</Text>
         </Press>
       ) : null}
 

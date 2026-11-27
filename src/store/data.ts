@@ -66,6 +66,8 @@ export interface WorkoutExercise {
   note: string;
   /** log left / right reps separately */
   split?: boolean;
+  /** neighbours with the same id form a superset */
+  superset?: string | null;
   sets: SetEntry[];
 }
 
@@ -85,6 +87,7 @@ export interface TemplateExercise {
   /** pinned note, shown every session */
   note: string;
   split?: boolean;
+  superset?: string | null;
   sets: TemplateSet[];
 }
 

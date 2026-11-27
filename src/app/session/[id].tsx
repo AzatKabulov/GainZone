@@ -15,11 +15,11 @@ import { getExercise, useExName } from '@/lib/exercise';
 import { haptic } from '@/lib/haptics';
 import { confirm } from '@/lib/menu';
 import { addExerciseToMuscles, emptyMuscleStats, FEELINGS, fmtDur, fmtSetValue, fmtVolume } from '@/lib/stats';
-import { setSavedDuration, startWorkoutFrom, templateFromExercises } from '@/lib/workout';
-import { useActive } from '@/store/active';
+import { setSavedDuration, startOrAsk, startWorkoutFrom, templateFromExercises } from '@/lib/workout';
 import { useData } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { alpha, fonts, useTheme } from '@/theme';
+import { goBack } from '@/lib/nav';
 
 export default function SessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -50,7 +50,7 @@ export default function SessionScreen() {
   if (!w || w.deleted) {
     return (
       <View style={{ flex: 1, backgroundColor: c.bgElevated }}>
-        <SheetHeader kicker="WORKOUT" title="NOT FOUND" onClose={() => router.back()} />
+        <SheetHeader kicker="WORKOUT" title="NOT FOUND" onClose={() => goBack()} />
         <Empty icon="alert-circle-outline" title="GONE" text="This workout was deleted." />
       </View>
     );
@@ -65,14 +65,7 @@ export default function SessionScreen() {
     haptic.success();
   };
 
-  const repeat = () => {
-    if (useActive.getState().workout) {
-      useFx.getState().info('WORKOUT IN PROGRESS', 'Finish or discard the current one first.');
-      return;
-    }
-    startWorkoutFrom(w.name, templateFromExercises(w.exercises));
-    router.replace('/workout');
-  };
+  const repeat = () => startOrAsk(() => startWorkoutFrom(w.name, templateFromExercises(w.exercises)), { replace: true });
 
   const saveAsRoutine = () => {
     const t = useData.getState().create('templates', { name: w.name, exercises: templateFromExercises(w.exercises), sort_order: Date.now() });
@@ -85,7 +78,7 @@ export default function SessionScreen() {
       useData.getState().remove('workouts', w.id);
       haptic.warning();
       useFx.getState().info('WORKOUT DELETED', w.name, { icon: 'undo', onPress: () => useData.getState().restore('workouts', w.id) });
-      router.back();
+      goBack();
     });
 
   return (
@@ -93,7 +86,7 @@ export default function SessionScreen() {
       <SheetHeader
         kicker={`${relativeLabel(dateKey(d))} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`}
         title={w.name.toUpperCase()}
-        onClose={() => router.back()}
+        onClose={() => goBack()}
         right={
           <Press tapHaptic onPress={() => (editing ? saveEdit() : setEditing(true))} style={{ paddingHorizontal: 10, height: 36, justifyContent: 'center' }}>
             <Txt variant="label" color={accent}>

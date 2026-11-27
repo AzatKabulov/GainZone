@@ -1,3 +1,5 @@
+import { router } from 'expo-router';
+
 import type { ExerciseDef } from '@/data/exerciseTypes';
 import { patchWorkout, useActive, type ActiveWorkout } from '@/store/active';
 import {
@@ -15,6 +17,8 @@ import { useSettings } from '@/store/settings';
 import { nowIso } from './date';
 import { exName, getExercise } from './exercise';
 import { haptic } from './haptics';
+import { openMenu } from './menu';
+import { linkWithNext, normalizeSupersets, unlink } from './superset';
 import { skipRest, startRest, warmUpAudio } from './rest';
 import {
   e1rm,
@@ -79,6 +83,7 @@ export function buildExercise(exerciseId: string, tpl?: TemplateExercise): Worko
     rest: tpl?.rest ?? (ex.rest || useSettings.getState().defaultRest),
     note: '',
     split,
+    superset: tpl?.superset ?? null,
     sets,
   };
 }
@@ -165,7 +170,7 @@ export function replaceExercise(weId: string, exerciseId: string) {
 }
 
 export function removeExercise(weId: string) {
-  patchWorkout((w) => ({ ...w, exercises: w.exercises.filter((we) => we.id !== weId) }));
+  patchWorkout((w) => ({ ...w, exercises: normalizeSupersets(w.exercises.filter((we) => we.id !== weId)) }));
 }
 
 export function moveExercise(weId: string, dir: -1 | 1) {
@@ -175,8 +180,17 @@ export function moveExercise(weId: string, dir: -1 | 1) {
     if (i < 0 || j < 0 || j >= w.exercises.length) return w;
     const list = [...w.exercises];
     [list[i], list[j]] = [list[j], list[i]];
-    return { ...w, exercises: list };
+    return { ...w, exercises: normalizeSupersets(list) };
   });
+}
+
+/** Superset this exercise with the one below it (or leave its superset). */
+export function setSuperset(weId: string, join: boolean) {
+  patchWorkout((w) => {
+    const i = w.exercises.findIndex((we) => we.id === weId);
+    return { ...w, exercises: join ? linkWithNext(w.exercises, i) : unlink(w.exercises, i) };
+  });
+  haptic.tap();
 }
 
 export const setExerciseNote = (weId: string, note: string) => mapEx(weId, (we) => ({ ...we, note }));
@@ -209,8 +223,17 @@ export function addSet(weId: string) {
 }
 
 export function removeSet(weId: string, setId: string) {
-  mapEx(weId, (we) => ({ ...we, sets: we.sets.filter((s) => s.id !== setId) }));
+  const we = useActive.getState().workout?.exercises.find((x) => x.id === weId);
+  const at = we?.sets.findIndex((s) => s.id === setId) ?? -1;
+  if (!we || at < 0) return;
+  const removed = we.sets[at];
+  mapEx(weId, (x) => ({ ...x, sets: x.sets.filter((s) => s.id !== setId) }));
   haptic.warning();
+  useFx.getState().info('SET DELETED', 'Tap to undo', {
+    icon: 'undo',
+    onPress: () =>
+      mapEx(weId, (x) => (x.sets.some((s) => s.id === setId) ? x : { ...x, sets: [...x.sets.slice(0, at), removed, ...x.sets.slice(at)] })),
+  });
 }
 
 export function updateSet(weId: string, setId: string, patch: Partial<SetEntry>) {
@@ -231,6 +254,41 @@ export function cycleSetType(weId: string, setId: string) {
 }
 
 /** Tick a set: records PRs, starts the rest timer, and rewards you. */
+/** Tick one set (filling sensible defaults into empty fields) and work out its PRs. No haptics / rest. */
+function markDone(weId: string, setId: string): { done: SetEntry; pr: string[] } | null {
+  const w = useActive.getState().workout;
+  const we = w?.exercises.find((x) => x.id === weId);
+  const set = we?.sets.find((s) => s.id === setId);
+  if (!w || !we || !set) return null;
+  const ex = getExercise(we.exercise_id);
+  // Empty fields: fall back to sensible values so a tap is always enough.
+  const filled: Partial<SetEntry> = {};
+  if (ex.type === 'time' || ex.type === 'cardio') {
+    if (!set.time) filled.time = ex.type === 'time' ? 60 : 10;
+  } else {
+    if (!set.reps) filled.reps = set.reps_r || 10;
+    if (we.split && !set.reps_r) filled.reps_r = filled.reps ?? set.reps ?? 10;
+  }
+  const done = { ...set, ...filled, done: true, done_at: nowIso() };
+  const pr = detectPR(we.exercise_id, ex, done, w);
+  mapEx(weId, (x) => ({ ...x, sets: x.sets.map((s) => (s.id === setId ? { ...done, pr, auto: false } : s)) }));
+  return { done, pr };
+}
+
+const hasValue = (s: SetEntry) => !!(s.weight || s.reps || s.reps_r || s.time || s.dist);
+
+/** Unticked sets the user typed numbers into (prefilled suggestions don't count). */
+export function filledUnticked(): number {
+  const w = useActive.getState().workout;
+  return (w?.exercises ?? []).reduce((a, we) => a + we.sets.filter((s) => !s.done && !s.auto && hasValue(s)).length, 0);
+}
+
+/** Tick every set that has numbers typed in (used when finishing). */
+export function completeFilledSets() {
+  const w = useActive.getState().workout;
+  for (const we of w?.exercises ?? []) for (const s of we.sets) if (!s.done && !s.auto && hasValue(s)) markDone(we.id, s.id);
+}
+
 export function toggleSet(weId: string, setId: string) {
   const w = useActive.getState().workout;
   const we = w?.exercises.find((x) => x.id === weId);
@@ -244,17 +302,7 @@ export function toggleSet(weId: string, setId: string) {
     return;
   }
 
-  // Empty fields: fall back to sensible values so a tap is always enough.
-  const filled: Partial<SetEntry> = {};
-  if (ex.type === 'time' || ex.type === 'cardio') {
-    if (!set.time) filled.time = ex.type === 'time' ? 60 : 10;
-  } else {
-    if (!set.reps) filled.reps = set.reps_r || 10;
-    if (we.split && !set.reps_r) filled.reps_r = filled.reps ?? set.reps ?? 10;
-  }
-  const done = { ...set, ...filled, done: true, done_at: nowIso() };
-  const pr = detectPR(we.exercise_id, ex, done, w);
-  mapEx(weId, (x) => ({ ...x, sets: x.sets.map((s) => (s.id === setId ? { ...done, pr, auto: false } : s)) }));
+  const { done, pr } = markDone(weId, setId)!;
 
   if (pr.length) {
     haptic.celebrate();
@@ -272,10 +320,14 @@ export function toggleSet(weId: string, setId: string) {
     haptic.success();
   }
 
-  // rest timer — skip for the very last set of the last exercise
+  // rest timer — skip for the very last set of the last exercise, and between exercises of a superset
   const isLastSet = we.sets.every((s) => s.id === setId || s.done);
   const isLastEx = w.exercises[w.exercises.length - 1]?.id === weId;
-  if (!(isLastSet && isLastEx) && done.type !== 'warmup' && we.rest > 0) {
+  const idx = w.exercises.findIndex((x) => x.id === weId);
+  const midSuperset = !!we.superset && w.exercises[idx + 1]?.superset === we.superset;
+  if (midSuperset && done.type !== 'warmup') {
+    // straight on to the next exercise of the superset
+  } else if (!(isLastSet && isLastEx) && done.type !== 'warmup' && we.rest > 0) {
     startRest(we.rest, weId, exName(ex));
   } else if (done.type === 'warmup' && we.rest > 0) {
     startRest(Math.min(60, we.rest), weId, exName(ex));
@@ -362,6 +414,31 @@ export function finishWorkout(): string | null {
   return w.id;
 }
 
+/**
+ * Start a workout and open it. If another one is still running, ask first: resume it, or discard it and
+ * start the new one (never silently replace or silently resume).
+ */
+export function startOrAsk(start: () => void, opts: { replace?: boolean } = {}) {
+  const live = useActive.getState().workout;
+  const open = () => (opts.replace ? router.replace('/workout') : router.push('/workout'));
+  const go = () => {
+    start();
+    open();
+  };
+  if (!live) return go();
+  openMenu(`"${live.name}" is still running`, [
+    { label: 'Resume it', onPress: open },
+    {
+      label: 'Discard it & start new',
+      destructive: true,
+      onPress: () => {
+        discardWorkout();
+        go();
+      },
+    },
+  ]);
+}
+
 export function discardWorkout() {
   skipRest();
   useActive.setState({ workout: null, rest: null });
@@ -377,6 +454,7 @@ export function templateFromExercises(list: WorkoutExercise[]): TemplateExercise
     rest: we.rest,
     note: '',
     split: we.split,
+    superset: we.superset ?? null,
     sets: we.sets.map((s) => ({ type: s.type, weight: s.weight, reps: s.reps, reps_r: s.reps_r ?? null, time: s.time ?? null, dist: s.dist ?? null })),
   }));
 }

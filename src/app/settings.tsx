@@ -24,6 +24,7 @@ import { useFx } from '@/store/fx';
 import { useSettings } from '@/store/settings';
 import { signOut, syncNow, useSync } from '@/store/sync';
 import { ACCENT_KEYS, ACCENTS, alpha, fonts, useTheme, type ThemeMode } from '@/theme';
+import { goBack } from '@/lib/nav';
 
 const GOALS = [
   { id: 'mass', label: 'BUILD MUSCLE' },
@@ -44,7 +45,7 @@ export default function SettingsScreen() {
   const [height, setHeight] = useState(profile?.height_cm ? String(profile.height_cm) : '');
   const [birth, setBirth] = useState(profile?.birth_year ? String(profile.birth_year) : '');
 
-  const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
+  const close = () => (router.canGoBack() ? goBack() : router.replace('/'));
 
   const saveBasics = () => {
     const h = Number(height.replace(',', '.'));

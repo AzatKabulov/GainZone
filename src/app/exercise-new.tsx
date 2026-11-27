@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +10,7 @@ import { haptic } from '@/lib/haptics';
 import { useData } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { useTheme } from '@/theme';
+import { goBack } from '@/lib/nav';
 
 const TYPES: { id: LogType; label: string }[] = [
   { id: 'weight_reps', label: 'KG × REPS' },
@@ -57,12 +57,12 @@ export default function NewExercise() {
     });
     haptic.success();
     useFx.getState().info('EXERCISE CREATED', row.name);
-    router.back();
+    goBack();
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bgElevated }}>
-      <SheetHeader kicker="NEW" title="EXERCISE" onClose={() => router.back()} />
+      <SheetHeader kicker="NEW" title="EXERCISE" onClose={() => goBack()} />
       <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 30 }}>
         <FieldLabel>NAME</FieldLabel>
         <Input value={name} onChangeText={setName} placeholder="Hammer Strength Row" autoFocus />
