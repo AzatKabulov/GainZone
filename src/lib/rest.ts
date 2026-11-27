@@ -123,8 +123,10 @@ export async function restFinishedInApp() {
   if (!useSettings.getState().sound) return;
   await prepareAudio();
   try {
-    player?.seekTo(0);
-    player?.play();
+    if (player) {
+      await player.seekTo(0).catch(() => {});
+      player.play();
+    }
   } catch {
     // ignore
   }

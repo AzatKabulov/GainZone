@@ -10,6 +10,7 @@ import { DurationSheet } from '@/components/DurationSheet';
 import { ExerciseBlock, KB_ACCESSORY } from '@/components/ExerciseBlock';
 import { mix, useBodyPalette } from '@/components/kit';
 import { NoteSheet } from '@/components/NoteSheet';
+import { PlateSheet } from '@/components/PlateSheet';
 import { RestSheet } from '@/components/RestSheet';
 import { RestDock } from '@/components/RestTimer';
 import { MUSCLE_IDS, type MuscleId } from '@/data/muscles';
@@ -34,12 +35,15 @@ export default function WorkoutScreen() {
   const insets = useSafeAreaInsets();
   const w = useActive((s) => s.workout);
   const rest = useActive((s) => !!s.rest);
-  const now = useNow(1000);
+  // coarse clock for the 'still running?' banner; the visible timer ticks on its own (LiveElapsed)
+  const now = useNow(30000);
   const [editingName, setEditingName] = useState(false);
   const [noteFor, setNoteFor] = useState<string | null>(null);
   const [restFor, setRestFor] = useState<string | null>(null);
   const [timerOpen, setTimerOpen] = useState(false);
   const [durOpen, setDurOpen] = useState(false);
+  const [durSeconds, setDurSeconds] = useState(0);
+  const [plateKg, setPlateKg] = useState<number | null>(null);
   const palette = useBodyPalette();
   // muscles worked so far (only changes when a set is ticked) → stable key for the mini figure
   const st = emptyMuscleStats();
@@ -74,6 +78,11 @@ export default function WorkoutScreen() {
 
   const totals = workoutTotals(w.exercises);
   const elapsed = (now - Date.parse(w.started_at)) / 1000;
+
+  const openDuration = () => {
+    setDurSeconds((Date.now() - Date.parse(w.started_at)) / 1000);
+    setDurOpen(true);
+  };
 
   const add = () => {
     setPickHandler((ids) => addExercises(ids), { multi: true, title: 'ADD EXERCISES' });
@@ -143,7 +152,7 @@ export default function WorkoutScreen() {
           <Button label="FINISH" small onPress={finish} style={{ paddingHorizontal: 18, height: 44 }} />
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 }}>
-          <Metric label="DURATION" value={fmtElapsed(elapsed)} color={accent} onPress={() => setDurOpen(true)} />
+          <Metric label="DURATION" value={<LiveElapsed since={w.started_at} />} color={accent} onPress={openDuration} />
           <Metric label="VOLUME" value={`${fmtVolume(totals.volume)} kg`} />
           <Metric label="SETS" value={String(totals.sets)} />
           <View style={{ width: 84, height: 70 }}>
@@ -167,7 +176,7 @@ export default function WorkoutScreen() {
                 Forgot to finish? Set the real duration first.
               </Txt>
             </View>
-            <Button label="FIX" small variant="outline" onPress={() => setDurOpen(true)} />
+            <Button label="FIX" small variant="outline" onPress={openDuration} />
           </View>
         ) : null}
         {w.exercises.length === 0 ? (
@@ -185,6 +194,7 @@ export default function WorkoutScreen() {
               onRest={setRestFor}
               superset={supers[i]}
               canLinkNext={i < w.exercises.length - 1 && !(we.superset && w.exercises[i + 1].superset === we.superset)}
+              onPlates={setPlateKg}
             />
           </Animated.View>
         ))}
@@ -200,6 +210,7 @@ export default function WorkoutScreen() {
       </ScrollView>
 
       <RestDock />
+      <PlateSheet kg={plateKg} onClose={() => setPlateKg(null)} />
       <NoteSheet weId={noteFor} onClose={() => setNoteFor(null)} />
       <RestSheet
         visible={!!restFor}
@@ -214,7 +225,7 @@ export default function WorkoutScreen() {
       />
       <DurationSheet
         visible={durOpen}
-        seconds={elapsed}
+        seconds={durSeconds}
         startedAt="live"
         onDone={(sec) => {
           setLiveDuration(sec);
@@ -248,7 +259,13 @@ export default function WorkoutScreen() {
   );
 }
 
-function Metric({ label, value, color, onPress }: { label: string; value: string; color?: string; onPress?: () => void }) {
+/** The running clock — its own component so only this text re-renders every second. */
+function LiveElapsed({ since }: { since: string }) {
+  const now = useNow(1000);
+  return <>{fmtElapsed((now - Date.parse(since)) / 1000)}</>;
+}
+
+function Metric({ label, value, color, onPress }: { label: string; value: React.ReactNode; color?: string; onPress?: () => void }) {
   const { c } = useTheme();
   const body = (
     <>

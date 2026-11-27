@@ -222,6 +222,35 @@ export function addSet(weId: string) {
   haptic.light();
 }
 
+/** Round to what the equipment can load: 2.5 kg steps (barbell/machines), 2 kg for dumbbells. */
+export function roundLoad(kg: number, equip: string): number {
+  const step = equip === 'dumbbell' ? 2 : 2.5;
+  return Math.max(0, Math.round(kg / step) * step);
+}
+
+/**
+ * Put a short warm-up ramp in front of the working sets: ~50% × 8 and ~75% × 4
+ * (plus an empty-bar set for barbell lifts). Replaces any warm-ups already there.
+ */
+export function addWarmups(weId: string): boolean {
+  const w = useActive.getState().workout;
+  const we = w?.exercises.find((x) => x.id === weId);
+  if (!we) return false;
+  const ex = getExercise(we.exercise_id);
+  const top = Math.max(0, ...we.sets.filter((s) => s.type !== 'warmup').map((s) => s.weight ?? 0));
+  if (ex.type !== 'weight_reps' || top < 10) return false;
+  const ramp: { kg: number; reps: number }[] = [];
+  if (ex.equip === 'barbell' && top >= 40) ramp.push({ kg: 20, reps: 10 });
+  for (const [pct, reps] of [[0.5, 8], [0.75, 4]] as const) {
+    const kg = roundLoad(top * pct, ex.equip);
+    if (kg > 0 && kg < top && !ramp.some((r) => r.kg === kg)) ramp.push({ kg, reps });
+  }
+  const warm = ramp.map((r) => ({ ...blankSet('warmup'), weight: r.kg, reps: r.reps, reps_r: we.split ? r.reps : null }));
+  mapEx(weId, (x) => ({ ...x, sets: [...warm, ...x.sets.filter((s) => s.type !== 'warmup' || s.done)] }));
+  haptic.success();
+  return true;
+}
+
 export function removeSet(weId: string, setId: string) {
   const we = useActive.getState().workout?.exercises.find((x) => x.id === weId);
   const at = we?.sets.findIndex((s) => s.id === setId) ?? -1;

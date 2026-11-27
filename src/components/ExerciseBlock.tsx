@@ -11,8 +11,9 @@ import { openMenu } from '@/lib/menu';
 import { setPickHandler } from '@/lib/pick';
 import { exerciseSessions, finishedWorkouts, fmtKg, fmtReps, previousForSets, progressionHint, recentNotes } from '@/lib/stats';
 import type { SupersetInfo } from '@/lib/superset';
-import { addSet, moveExercise, pinnedNote, removeExercise, removeSet, replaceExercise, setSplit, setSuperset, toggleSet, updateSet } from '@/lib/workout';
+import { addSet, addWarmups, moveExercise, pinnedNote, removeExercise, removeSet, replaceExercise, setSplit, setSuperset, toggleSet, updateSet } from '@/lib/workout';
 import { useData, type SetEntry, type WorkoutExercise } from '@/store/data';
+import { useFx } from '@/store/fx';
 import { alpha, fonts, useTheme } from '@/theme';
 import { fmtRestLong } from './RestSheet';
 import { SwipeDelete } from './SwipeDelete';
@@ -37,6 +38,7 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   onRest,
   superset = null,
   canLinkNext = false,
+  onPlates,
 }: {
   we: WorkoutExercise;
   workoutId: string;
@@ -49,6 +51,8 @@ export const ExerciseBlock = memo(function ExerciseBlock({
   superset?: SupersetInfo | null;
   /** the exercise below can be joined into a superset with this one */
   canLinkNext?: boolean;
+  /** open the plate calculator for this weight */
+  onPlates?: (kg: number) => void;
 }) {
   const { c, accent } = useTheme();
   const ex = useExercise(we.exercise_id);
@@ -74,6 +78,19 @@ export const ExerciseBlock = memo(function ExerciseBlock({
           router.push('/pick');
         },
       },
+      ...(ex.type === 'weight_reps'
+        ? [
+            {
+              label: 'Add warm-up sets',
+              onPress: () => {
+                if (!addWarmups(we.id)) useFx.getState().info('ENTER A WEIGHT FIRST', 'Warm-ups are worked out from your working weight.');
+              },
+            },
+          ]
+        : []),
+      ...((ex.equip === 'barbell' || ex.equip === 'smith') && onPlates
+        ? [{ label: 'Plate calculator', onPress: () => onPlates(we.sets.find((x) => !x.done && x.type !== 'warmup')?.weight ?? we.sets[0]?.weight ?? 60) }]
+        : []),
       ...(canLinkNext ? [{ label: 'Superset with next exercise', onPress: () => setSuperset(we.id, true) }] : []),
       ...(superset ? [{ label: 'Remove from superset', onPress: () => setSuperset(we.id, false) }] : []),
       ...(index > 0 ? [{ label: 'Move up', onPress: () => moveExercise(we.id, -1) }] : []),

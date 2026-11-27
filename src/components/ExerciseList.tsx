@@ -6,7 +6,7 @@ import { muscleBreakdown, searchExercises, type ExerciseDef } from '@/data/exerc
 import { EQUIP_NAME, type Equip } from '@/data/exerciseTypes';
 import { GROUPS, MUSCLES } from '@/data/muscles';
 import { useAllExercises, useExName } from '@/lib/exercise';
-import { finishedWorkouts } from '@/lib/stats';
+import { bestSet, finishedWorkouts, fmtKg, topReps } from '@/lib/stats';
 import { useData } from '@/store/data';
 import { alpha, useTheme } from '@/theme';
 import { EquipSheet, FilterButton, matchEquip, matchMuscle, MUSCLE_FILTERS, MuscleSheet } from './ExerciseFilters';
@@ -39,6 +39,18 @@ export function ExerciseList({
     const m = new Map<string, number>();
     const list = finishedWorkouts(workouts);
     list.forEach((w, wi) => w.exercises.forEach((we) => m.set(we.exercise_id, Math.max(m.get(we.exercise_id) ?? 0, list.length - wi))));
+    return m;
+  }, [workouts]);
+
+  // last top set per exercise ("60×10"), newest session wins
+  const lastTop = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const w of finishedWorkouts(workouts))
+      for (const we of w.exercises) {
+        if (m.has(we.exercise_id)) continue;
+        const b = bestSet(we);
+        if (b) m.set(we.exercise_id, b.weight ? `${fmtKg(b.weight)}×${topReps(b)}` : b.time ? `${b.time}s` : `${topReps(b)} reps`);
+      }
     return m;
   }, [workouts]);
 
@@ -82,7 +94,7 @@ export function ExerciseList({
         <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
       </View>
     ) : (
-      <Row ex={item.ex} selected={sel.has(item.ex.id)} onPress={onPress} accent={accent} />
+      <Row ex={item.ex} selected={sel.has(item.ex.id)} onPress={onPress} accent={accent} last={lastTop.get(item.ex.id)} />
     );
 
   return (
@@ -141,7 +153,7 @@ export function ExerciseList({
   );
 }
 
-const Row = memo(function Row({ ex, selected, onPress, accent }: { ex: ExerciseDef; selected: boolean; onPress: (e: ExerciseDef) => void; accent: string }) {
+const Row = memo(function Row({ ex, selected, onPress, accent, last }: { ex: ExerciseDef; selected: boolean; onPress: (e: ExerciseDef) => void; accent: string; last?: string }) {
   const { c } = useTheme();
   const exName = useExName();
   const prim = muscleBreakdown(ex)
@@ -175,6 +187,11 @@ const Row = memo(function Row({ ex, selected, onPress, accent }: { ex: ExerciseD
           {ex.custom ? ' · CUSTOM' : ''}
         </Txt>
       </View>
+      {last && !selected ? (
+        <Txt variant="mono" color={c.textDim} style={{ fontSize: 12 }}>
+          {last}
+        </Txt>
+      ) : null}
       {selected ? (
         <View style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: accent, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="checkmark-sharp" size={18} color={c.bg} />
