@@ -17,6 +17,7 @@ import { confirm } from '@/lib/menu';
 import { addExerciseToMuscles, emptyMuscleStats, FEELINGS, fmtDur, fmtKg, fmtSetValue, fmtVolume, workoutTotals } from '@/lib/stats';
 import { blankLoggedExercise, setSavedDuration, startOrAsk, startWorkoutFrom, templateFromExercises } from '@/lib/workout';
 import { setPickHandler } from '@/lib/pick';
+import { shareWorkout } from '@/lib/share';
 import { useData, uuid, type SetEntry, type WorkoutExercise } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { alpha, fonts, useTheme } from '@/theme';
@@ -231,7 +232,10 @@ export default function SessionScreen() {
         </View>
 
         <Button label="REPEAT WORKOUT" icon="repeat" onPress={repeat} style={{ marginTop: 22 }} />
-        <Button label="SAVE AS ROUTINE" icon="bookmark-outline" variant="outline" onPress={saveAsRoutine} style={{ marginTop: 10 }} />
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+          <Button label="SAVE AS ROUTINE" icon="bookmark-outline" variant="outline" onPress={saveAsRoutine} style={{ flex: 1 }} />
+          <Button label="SHARE" icon="share-outline" variant="outline" onPress={() => void shareWorkout(w)} style={{ flex: 0.6 }} />
+        </View>
         <Button label="DELETE WORKOUT" icon="trash-outline" variant="danger" small onPress={del} style={{ marginTop: 18 }} />
       </ScrollView>
       <DurationSheet

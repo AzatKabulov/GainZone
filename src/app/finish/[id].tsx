@@ -27,6 +27,7 @@ import {
   workoutTotals,
 } from '@/lib/stats';
 import { routineChanged, setSavedDuration, updateTemplateFromWorkout } from '@/lib/workout';
+import { shareWorkout } from '@/lib/share';
 import { useData } from '@/store/data';
 import { useFx } from '@/store/fx';
 import { alpha, fonts, useTheme } from '@/theme';
@@ -250,6 +251,7 @@ export default function FinishScreen() {
         ) : null}
 
         <Button label="SAVE WORKOUT" icon="checkmark" onPress={save} style={{ marginTop: 26 }} />
+        <Button label="SHARE WITH A FRIEND" icon="share-outline" variant="outline" small onPress={() => void shareWorkout(w)} style={{ marginTop: 10 }} />
       </ScrollView>
       <DurationSheet
         visible={durOpen}
