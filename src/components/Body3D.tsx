@@ -1,10 +1,11 @@
 /* eslint-disable react-hooks/refs -- imperative WebGL bridge: all mutable scene state lives in refs and is only touched from GL / gesture callbacks */
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { PanResponder, View, type GestureResponderEvent, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { PanResponder, Platform, View, type GestureResponderEvent, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import * as THREE from 'three';
 
 import { BODY_MESH } from '@/data/bodyMesh';
+import { Body2D } from './Body2D';
 import type { MuscleId } from '@/data/muscles';
 
 /**
@@ -114,6 +115,26 @@ function getBody(): Decoded {
   geometry.computeBoundingSphere();
   cache = { geometry, faceLab, center: (M.min[1] + M.max[1]) / 2, height: M.max[1] - M.min[1] };
   return cache;
+}
+
+/**
+ * three r163+ only renders with WebGL 2 and refuses any context that is `instanceof WebGLRenderingContext`.
+ * Expo Go's native expo-gl can hand out a WebGL 2-capable (OpenGL ES 3) context whose class still inherits from
+ * WebGLRenderingContext, so the check is hidden while the renderer is constructed. A real WebGL 1 context
+ * (no `supportsWebGL2`) is rejected up front; the caller then shows the flat fallback.
+ */
+function createRenderer(gl: ExpoWebGLRenderingContext, canvas: HTMLCanvasElement): THREE.WebGLRenderer {
+  const flags = gl as unknown as { supportsWebGL2?: boolean };
+  if (Platform.OS !== 'web' && flags.supportsWebGL2 === false) throw new Error('WebGL 2 is not available');
+  const g = globalThis as unknown as { WebGLRenderingContext?: unknown };
+  const saved = g.WebGLRenderingContext;
+  const hide = Platform.OS !== 'web' && typeof saved === 'function';
+  if (hide) g.WebGLRenderingContext = function NotWebGL1() {};
+  try {
+    return new THREE.WebGLRenderer({ canvas, context: gl as unknown as WebGL2RenderingContext, antialias: true });
+  } finally {
+    if (hide) g.WebGLRenderingContext = saved;
+  }
 }
 
 export interface BodyPalette {
@@ -360,7 +381,22 @@ export function Body3D({
     }),
   );
 
+  const [failed, setFailed] = useState(false);
+  const fail = (e: unknown) => {
+    cancelAnimationFrame(st.current.raf);
+    console.warn('Body3D: 3D view unavailable', e);
+    setFailed(true);
+  };
+
   const onContextCreate = (gl: ExpoWebGLRenderingContext) => {
+    try {
+      setup(gl);
+    } catch (e) {
+      fail(e);
+    }
+  };
+
+  const setup = (gl: ExpoWebGLRenderingContext) => {
     const s = st.current;
     const w = gl.drawingBufferWidth;
     const h = gl.drawingBufferHeight;
@@ -373,8 +409,10 @@ export function Body3D({
       clientHeight: h,
       getContext: () => gl,
     } as unknown as HTMLCanvasElement;
-    const renderer = new THREE.WebGLRenderer({ canvas, context: gl as unknown as WebGL2RenderingContext, antialias: true });
-    renderer.debug.checkShaderErrors = false;
+    const renderer = createRenderer(gl, canvas);
+    // a shader that doesn't compile on this GPU means an empty view: fall back to the flat map instead
+    renderer.debug.checkShaderErrors = true;
+    renderer.debug.onShaderError = () => fail(new Error('shader compile failed'));
     renderer.setPixelRatio(1);
     renderer.setSize(w, h, false);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -435,6 +473,13 @@ export function Body3D({
 
     const loop = () => {
       s.raf = requestAnimationFrame(loop);
+      try {
+        frame();
+      } catch (e) {
+        fail(e);
+      }
+    };
+    const frame = () => {
       if (s.spin && !dual) {
         s.rotY += 0.004;
         s.dirty = true;
@@ -481,6 +526,8 @@ export function Body3D({
     st.current.size = { w: width, h: height };
     setSize({ w: width, h: height });
   };
+
+  if (failed || dual) return <Body2D colors={colors} labels={!dual} style={[style, { paddingVertical: dual ? 2 : 16 }]} />;
 
   return (
     <View style={style} onLayout={onLayout} {...(interactive ? pan.panHandlers : {})} pointerEvents={interactive ? 'auto' : 'none'}>

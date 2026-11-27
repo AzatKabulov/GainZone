@@ -3,6 +3,8 @@ import { Tabs } from 'expo-router/js-tabs';
 import { TabBar } from '@/components/TabBar';
 import { useTheme } from '@/theme';
 
+export { CrashScreen as ErrorBoundary } from '@/components/CrashScreen';
+
 export default function TabsLayout() {
   const { c } = useTheme();
   return (

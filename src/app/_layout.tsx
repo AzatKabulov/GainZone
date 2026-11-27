@@ -23,6 +23,8 @@ import { startSync } from '@/store/sync';
 import { useApplyAppearance, useTheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+export { CrashScreen as ErrorBoundary } from '@/components/CrashScreen';
 startAuth();
 
 export default function RootLayout() {
